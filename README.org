@@ -1,0 +1,15 @@
+* Cl-Online-Learning 
+
+** Usage
+see example.lisp
+
+** Installation
+In shell,
+#+BEGIN_SRC 
+cd ~/quicklisp/local-projects/
+git clone https://github.com/masatoi/cl-online-learning.git
+#+END_SRC
+In Lisp,
+#+BEGIN_SRC lisp
+(ql:quickload :cl-online-learning)
+#+END_SRC
