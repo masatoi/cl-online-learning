@@ -58,7 +58,7 @@
 ;; 破壊的に変更されたweightと非破壊的に計算されたbiasを返す
 (defun train-svm-sgd-1step (input weight bias learning-rate regularization-parameter
 			    training-label v-scale-result)
-  (let* ((update-p (<= (* training-label (inner-product weight input)) 1d0))
+  (let* ((update-p (<= (* training-label (f input weight bias)) 1d0))
 	 (tmp-weight
 	  (if update-p
 	    (v+ weight (v-scale input (* learning-rate training-label) v-scale-result) weight)
