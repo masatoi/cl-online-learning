@@ -15,6 +15,7 @@
 	   #:v+
 	   #:v-
 	   #:v-scale
+	   #:diagonal-matrix-multiplication
 	   #:inner-product
 	   #:inner-product-unsafe
 	   #:distance-to-origin
@@ -289,6 +290,17 @@ e.g.
   (do-vecs ((ev vec :type double-float)
 	    (_ result :type double-float :setf-var sr))
     (setf sr (* n ev)))
+  result)
+
+;; diagonal matrix multiplication
+(declaim (ftype (function (dvec dvec dvec) dvec) diagonal-matrix-multiplication))
+(defun diagonal-matrix-multiplication (diagonal-matrix vec result)
+  (declare (type dvec diagonal-matrix vec result))
+  (assert (= (length diagonal-matrix) (length vec) (length result)))
+  (do-vecs ((edm diagonal-matrix :type double-float)
+	    (ev vec :type double-float)
+	    (_ result :type double-float :setf-var sr))
+    (setf sr (* edm ev)))
   result)
 
 ;;@ function-type: dvec -> dvec -> double-float
