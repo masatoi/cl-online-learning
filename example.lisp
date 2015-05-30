@@ -44,6 +44,12 @@
       (train-svm-sgd a1a-train learning-rate regularization-parameter)
     (test a1a-test weight bias)))
 
+;; AROW
+(multiple-value-bind (mu sigma mu0-sigma0-vec)
+    (train-arow a1a-train 10d0)
+  (declare (ignore sigma))
+  (test a1a-test mu (aref mu0-sigma0-vec 0)))
+
 ;;;;; a9aに対する訓練とテスト
 
 ;; $ cd /tmp
@@ -63,3 +69,9 @@
   (multiple-value-bind (weight bias)
       (train-svm-sgd a9a-train learning-rate regularization-parameter)
     (test a9a-test weight bias)))
+
+;; AROW
+(multiple-value-bind (mu sigma mu0-sigma0-vec)
+    (train-arow a9a-train 10d0)
+  (declare (ignore sigma))
+  (test a9a-test mu (aref mu0-sigma0-vec 0)))
