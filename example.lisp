@@ -1,8 +1,8 @@
 ;;; -*- coding:utf-8; mode:lisp -*-
 
-(in-package :cl-ol)
+(in-package :cl-online-learning)
 
-;;; データを用意する
+;;; Read libsvm dataset
 (defun read-libsvm-data (data-path data-dimension)
   (let ((data-list nil))
     (with-open-file (f data-path :direction :input)
@@ -24,54 +24,62 @@
 		       (read-loop (cons (cons training-label dv) data-list)))))))
 	(read-loop data-list)))))
 
-;;;;; a1aに対する訓練とテスト
+;;; a1a dataset
 
-;; $ cd /tmp
+;; Fetch dataset
 ;; $ wget http://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/binary/a1a
 ;; $ wget http://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/binary/a1a.t
-(defparameter a1a-train (read-libsvm-data "/home/wiz/tmp/a1a" 123))
-(defparameter a1a-test (read-libsvm-data "/home/wiz/tmp/a1a.t" 123))
 
-;; パーセプトロン
-(multiple-value-bind (weight bias)
-    (train-perceptron a1a-train)
-  (test a1a-test weight bias))
+(defparameter a1a-dim 123)
+(defparameter a1a-train (read-libsvm-data "/home/wiz/tmp/a1a" a1a-dim))
+(defparameter a1a-test (read-libsvm-data "/home/wiz/tmp/a1a.t" a1a-dim))
 
-;; 線形SVM+SGD
-(let ((learning-rate 0.01d0)
-      (regularization-parameter 0.01d0))
-  (multiple-value-bind (weight bias)
-      (train-svm-sgd a1a-train learning-rate regularization-parameter)
-    (test a1a-test weight bias)))
+;; Perceptron
+(let ((learner (make-perceptron a1a-dim)))
+  (train learner a1a-train)
+  (test  learner a1a-test))
+
+;; Averaged Perceptron
+(let ((learner (make-averaged-perceptron a1a-dim (length a1a-train))))
+  (train learner a1a-train)
+  (test  learner a1a-test))
+
+;; Linear SVM
+(let ((learner (make-svm a1a-dim 0.01d0 0.01d0))) ; learning-rate & regularization-parameter
+  (train learner a1a-train)
+  (test  learner a1a-test))
 
 ;; AROW
-(multiple-value-bind (mu sigma mu0-sigma0-vec)
-    (train-arow a1a-train 10d0)
-  (declare (ignore sigma))
-  (test a1a-test mu (aref mu0-sigma0-vec 0)))
+(let ((learner (make-arow a1a-dim 10d0))) ; gamma
+  (train learner a1a-train)
+  (test  learner a1a-test))
 
-;;;;; a9aに対する訓練とテスト
+;;; a9a dataset
 
-;; $ cd /tmp
+;; Fetch dataset
 ;; $ wget http://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/binary/a9a
 ;; $ wget http://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/binary/a9a.t
-(defparameter a9a-train (read-libsvm-data "/home/wiz/tmp/a9a" 123))
-(defparameter a9a-test (read-libsvm-data "/home/wiz/tmp/a9a.t" 123))
 
-;; パーセプトロン
-(multiple-value-bind (weight bias)
-    (train-perceptron a9a-train)
-  (test a9a-test weight bias))
+(defparameter a9a-dim 123)
+(defparameter a9a-train (read-libsvm-data "/home/wiz/tmp/a9a" a9a-dim))
+(defparameter a9a-test (read-libsvm-data "/home/wiz/tmp/a9a.t" a9a-dim))
 
-;; 線形SVM+SGD
-(let ((learning-rate 0.01d0)
-      (regularization-parameter 0.001d0))
-  (multiple-value-bind (weight bias)
-      (train-svm-sgd a9a-train learning-rate regularization-parameter)
-    (test a9a-test weight bias)))
+;; Perceptron
+(let ((learner (make-perceptron a9a-dim)))
+  (train learner a9a-train)
+  (test  learner a9a-test))
+
+;; Averaged Perceptron
+(let ((learner (make-averaged-perceptron a1a-dim (length a9a-train))))
+  (train learner a9a-train)
+  (test  learner a9a-test))
+
+;; Linear SVM
+(let ((learner (make-svm a9a-dim 0.01d0 0.01d0))) ; learning-rate & regularization-parameter
+  (train learner a9a-train)
+  (test  learner a9a-test))
 
 ;; AROW
-(multiple-value-bind (mu sigma mu0-sigma0-vec)
-    (train-arow a9a-train 10d0)
-  (declare (ignore sigma))
-  (test a9a-test mu (aref mu0-sigma0-vec 0)))
+(let ((learner (make-arow a9a-dim 10d0))) ; gamma
+  (train learner a9a-train)
+  (test  learner a9a-test))
