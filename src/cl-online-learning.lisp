@@ -67,8 +67,11 @@
 
 ;;; Training with a training data list (1-pass)
 (defmethod train ((learner learner) training-data)
-  (dolist (datum training-data)
-    (update learner (cdr datum) (car datum)))
+  (etypecase training-data
+    (list (dolist (datum training-data)
+	    (update learner (cdr datum) (car datum))))
+    (vector (loop for datum across training-data do
+      (update learner (cdr datum) (car datum)))))
   learner)
 
 (defmethod train-with-interim-test ((learner learner) training-data test-data span)
@@ -356,3 +359,54 @@
 		 (* beta (sigma0-of learner)
 		    (sigma0-of learner)))))))
   learner)
+
+;;;; Multiclass classifier
+
+(defclass$ multiclass-classifier (learner) input-dimension n-class)
+
+(defun make-learner (learner-type input-dimension learner-params)
+  (let ((constructor (ecase learner-type
+		       (perceptron #'make-perceptron)
+		       (averaged-perceptron #'make-averaged-perceptron)
+		       (svm #'make-svm)
+		       (arow #'make-arow)
+		       (scw1 #'make-scw1)
+		       (scw2 #'make-scw2))))
+    (apply constructor (cons input-dimension learner-params))))
+
+;;; one vs rest
+
+(defclass$ one-vs-rest (multiclass-classifier)
+  learners-vector)
+
+(defun make-one-vs-rest (input-dimension n-class learner-type learner-params)
+  (let ((mulc (make-instance 'one-vs-rest
+		 :input-dimension input-dimension
+		 :n-class n-class
+		 :learners-vector (make-array n-class))))
+    (loop for i from 0 to (1- n-class) do
+      (setf (aref (learners-vector-of mulc) i)
+	    (make-learner learner-type input-dimension learner-params)))
+    mulc))
+
+;; Example
+;; input dimension: 3, number of classes: 4, learner: AROW, gamma: 1
+;;   (defparameter mulc (make-one-vs-rest 3 4 'arow '(1d0)))
+
+(defmethod predict ((mulc one-vs-rest) input)
+  (let ((max-f most-negative-double-float)
+	(max-i 0))
+    (loop for i from 0 to (1- (n-class-of mulc)) do
+      (let* ((learner (svref (learners-vector-of mulc) i))
+	     (learner-f (f input (weight-of learner) (bias-of learner))))
+	(if (> learner-f max-f)
+	  (setf max-f learner-f
+		max-i i))))
+    max-i))
+
+;; training-label should be integer (0 ... K-1)
+(defmethod update ((mulc one-vs-rest) input training-label)
+  (loop for i from 0 to (1- (n-class-of mulc)) do
+    (if (= i training-label)
+      (update (svref (learners-vector-of mulc) i) input 1d0)
+      (update (svref (learners-vector-of mulc) i) input -1d0))))
