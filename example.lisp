@@ -119,7 +119,7 @@
 ;; Averaged Perceptron
 (defparameter averaged-perceptron-learner (make-averaged-perceptron ijcnn1-dim (length ijcnn1-train)))
 (train averaged-perceptron-learner ijcnn1-train)
-(defparameter averaged-perceptron-interim (train-with-interim-test averaged-perceptron-learner ijcnn1-train ijcnn1-test 100))
+;; (defparameter averaged-perceptron-interim (train-with-interim-test averaged-perceptron-learner ijcnn1-train ijcnn1-test 100))
 (test  averaged-perceptron-learner ijcnn1-train)
 (test  averaged-perceptron-learner ijcnn1-test)
 
@@ -132,14 +132,14 @@
 ;; AROW
 (defparameter arow-learner (make-arow ijcnn1-dim 0.0005d0))
 (train arow-learner ijcnn1-train)
-(defparameter arow-interim (train-with-interim-test arow-learner ijcnn1-train ijcnn1-test 100))
+;; (defparameter arow-interim (train-with-interim-test arow-learner ijcnn1-train ijcnn1-test 100))
 (test  arow-learner ijcnn1-train)
 (test  arow-learner ijcnn1-test)
 
 ;; SCW-I
 (defparameter scw1-learner (make-scw1 ijcnn1-dim 0.65d0 0.5d0)) ; eta, C
 (train scw1-learner ijcnn1-train)
-(defparameter scw1-interim (train-with-interim-test scw1-learner ijcnn1-train ijcnn1-test 100))
+;; (defparameter scw1-interim (train-with-interim-test scw1-learner ijcnn1-train ijcnn1-test 100))
 (test  scw1-learner ijcnn1-train)
 (test  scw1-learner ijcnn1-test)
 
@@ -149,6 +149,56 @@
 (test  scw1-learner ijcnn1-train)
 (test  scw2-learner ijcnn1-test)
 
+(defparameter ijcnn1-train-shuffled (shuffle-vector (coerce ijcnn1-train 'simple-vector)))
+
+;; AROW
+(defparameter arow-learner (make-arow ijcnn1-dim 0.0005d0))
+(train arow-learner ijcnn1-train-shuffled)
+;; (defparameter arow-interim (train-with-interim-test arow-learner ijcnn1-train ijcnn1-test 100))
+(test  arow-learner ijcnn1-train-shuffled)
+(test  arow-learner ijcnn1-test)
+
+;; SCW-I
+(defparameter scw1-learner (make-scw1 ijcnn1-dim 0.65d0 0.5d0)) ; eta, C
+(train scw1-learner ijcnn1-train-shuffled)
+;; (defparameter scw1-interim (train-with-interim-test scw1-learner ijcnn1-train ijcnn1-test 100))
+(test  scw1-learner ijcnn1-train)
+(test  scw1-learner ijcnn1-test)
+
+;; SCW-II
+(defparameter scw2-learner (make-scw2 ijcnn1-dim 0.065d0 1d0)) ; eta, C
+(train scw2-learner ijcnn1-train-shuffled)
+(test  scw1-learner ijcnn1-train)
+(test  scw2-learner ijcnn1-test)
+
+;;; cod-rna
+
+(defparameter cod-rna-dim 8)
+(defparameter cod-rna-train (read-libsvm-data "/home/wiz/tmp/cod-rna" cod-rna-dim))
+(defparameter cod-rna-test (read-libsvm-data "/home/wiz/tmp/cod-rna.t" cod-rna-dim))
+(defparameter cod-rna-train-shuffled (shuffle-vector (coerce cod-rna-train 'simple-vector)))
+
+;; AROW
+(defparameter arow-learner (make-arow cod-rna-dim 0.000000000000000000000000001d0))
+(train arow-learner cod-rna-train)
+(test  arow-learner cod-rna-train)
+(test  arow-learner cod-rna-test)
+
+(defparameter arow-learner (make-arow cod-rna-dim 0.000000000000000000000000001d0))
+(train arow-learner cod-rna-train-shuffled)
+(test  arow-learner cod-rna-train)
+(test  arow-learner cod-rna-test)
+
+;; SCW1
+(defparameter scw1-learner (make-scw1 cod-rna-dim 0.5d0 0.000000000001d0))
+(train scw1-learner cod-rna-train)
+(test  scw1-learner cod-rna-train)
+(test  scw1-learner cod-rna-test)
+
+(defparameter scw1-learner (make-scw1 cod-rna-dim 0.065d0 1d0))
+(train scw1-learner cod-rna-train-shuffled)
+(test  scw1-learner cod-rna-train)
+(test  scw1-learner cod-rna-test)
 
 ;;; Multiclass classifier
 
@@ -174,6 +224,7 @@
 		       (read-loop (cons (cons training-label dv) data-list)))))))
 	(read-loop data-list)))))
 
+;; Fisher–Yates shuffle
 (defun shuffle-vector (vec)
   (loop for i from (1- (length vec)) downto 1 do
     (let* ((j (random (1+ i)))
@@ -189,11 +240,38 @@
 	   'simple-vector)))
 
 ;; Averaged Perceptron (one-vs-rest)
-(defparameter mulc (make-one-vs-rest 4 3 'averaged-perceptron (list (length iris))))
+(defparameter mulc (make-one-vs-rest 4 3 'averaged-perceptron (length iris)))
 (train mulc iris)
 (test mulc iris)
 
 ;; AROW (one-vs-rest)
-(defparameter mulc (make-one-vs-rest 4 3 'arow '(0.05d0)))
+(defparameter mulc (make-one-vs-rest 4 3 'arow 0.05d0))
 (train mulc iris)
 (test mulc iris)
+
+;; Averaged Perceptron (one-vs-one)
+(defparameter mulc (make-one-vs-one 4 3 'averaged-perceptron (length iris)))
+(train mulc iris)
+(test mulc iris)
+
+;; AROW (one-vs-one)
+(defparameter mulc (make-one-vs-one 4 3 'arow 0.05d0))
+(train mulc iris)
+(test mulc iris)
+
+;;; MNIST
+(defparameter mnist (read-libsvm-data-multiclass "/home/wiz/tmp/mnist" 780))
+(defparameter mnist+1 (mapcar (lambda (x)
+				(cons (1+ (car x)) (cdr x))) mnist))
+
+(defparameter mnist.t (read-libsvm-data-multiclass "/home/wiz/tmp/mnist.t" 780))
+(defparameter mnist.t+1 (mapcar (lambda (x)
+				(cons (1+ (car x)) (cdr x))) mnist.t))
+
+(defparameter mulc (make-one-vs-rest 780 10 'arow 100000d0))
+(train mulc mnist+1)
+(test mulc mnist.t+1)
+
+(defparameter mulc (make-one-vs-one 780 10 'arow 1000000d0d0))
+(train mulc mnist+1)
+(test mulc mnist.t+1)

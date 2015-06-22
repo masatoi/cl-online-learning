@@ -76,12 +76,21 @@
 
 (defmethod train-with-interim-test ((learner learner) training-data test-data span)
   (let ((result nil))
-    (loop for i from 0 to (1- (length training-data))
-	  for datum in training-data
-	  do
-       (update learner (cdr datum) (car datum))
-       (when (zerop (mod i span))
-	 (push (test learner test-data :quiet-p t) result)))
+    (etypecase training-data
+      (list
+       (loop for i from 0 to (1- (length training-data))
+	     for datum in training-data
+	     do
+	  (update learner (cdr datum) (car datum))
+	  (when (zerop (mod i span))
+	    (push (test learner test-data :quiet-p t) result))))
+      (vector
+       (loop for i from 0 to (1- (length training-data))
+	     for datum across training-data
+	     do
+	  (update learner (cdr datum) (car datum))
+	  (when (zerop (mod i span))
+	    (push (test learner test-data :quiet-p t) result)))))
     (nreverse result)))
 
 ;;; Perceptron
@@ -360,7 +369,7 @@
 		    (sigma0-of learner)))))))
   learner)
 
-;;;; Multiclass classifier
+;;;; Multiclass classifiers
 
 (defclass$ multiclass-classifier (learner) input-dimension n-class)
 
@@ -379,7 +388,7 @@
 (defclass$ one-vs-rest (multiclass-classifier)
   learners-vector)
 
-(defun make-one-vs-rest (input-dimension n-class learner-type learner-params)
+(defun make-one-vs-rest (input-dimension n-class learner-type &rest learner-params)
   (let ((mulc (make-instance 'one-vs-rest
 		 :input-dimension input-dimension
 		 :n-class n-class
@@ -388,10 +397,6 @@
       (setf (aref (learners-vector-of mulc) i)
 	    (make-learner learner-type input-dimension learner-params)))
     mulc))
-
-;; Example
-;; input dimension: 3, number of classes: 4, learner: AROW, gamma: 1
-;;   (defparameter mulc (make-one-vs-rest 3 4 'arow '(1d0)))
 
 (defmethod predict ((mulc one-vs-rest) input)
   (let ((max-f most-negative-double-float)
@@ -410,3 +415,63 @@
     (if (= i training-label)
       (update (svref (learners-vector-of mulc) i) input 1d0)
       (update (svref (learners-vector-of mulc) i) input -1d0))))
+
+;;; one vs one
+
+(defclass$ one-vs-one (multiclass-classifier)
+  learners-vector)
+
+(defun make-one-vs-one (input-dimension n-class learner-type &rest learner-params)
+  (let* ((n-learner (/ (* n-class (1- n-class)) 2))
+	 (mulc (make-instance 'one-vs-one
+		  :input-dimension input-dimension
+		  :n-class n-class
+		  :learners-vector (make-array n-learner))))
+    (loop for i from 0 to (1- n-learner) do
+      (setf (aref (learners-vector-of mulc) i)
+	    (make-learner learner-type input-dimension learner-params)))
+    mulc))
+
+(defun sum-permutation (n m)
+  (/ (* (+ n (- n m) 1) m) 2))
+
+(defun index-of-learner (k i L)
+  (+ (- k i)
+     (sum-permutation (1- L) i)
+     -1))
+
+;; TODO: each sub-learner's predict is evaluated twice.
+(defmethod predict ((mulc one-vs-one) input)
+  (let ((max-cnt 0)
+	(max-class nil))
+    (loop for k from 0 to (1- (n-class-of mulc)) do
+      (let ((cnt 0))
+	;; negative
+	(loop for i from 0 to (1- k) do
+	  ; (format t "k: ~A, Negative, learner-index: ~A~%" k (index-of-learner k i (n-class-of mulc)))
+	  (if (< (predict (svref (learners-vector-of mulc) (index-of-learner k i (n-class-of mulc))) input)
+		 0d0)
+	    (incf cnt)))
+	;; positive
+	(let ((start-index (sum-permutation (1- (n-class-of mulc)) k)))
+	  (loop for j from start-index to (+ start-index (- (1- (n-class-of mulc)) k 1)) do
+	    ; (format t "k: ~A, Positive, learner-index: ~A~%" k j)
+	    (if (> (predict (svref (learners-vector-of mulc) j) input) 0d0)
+	      (incf cnt))))
+	(if (> cnt max-cnt)
+	  (setf max-cnt cnt
+		max-class k))))
+    max-class))
+
+;; training-label should be integer (0 ... K-1)
+(defmethod update ((mulc one-vs-one) input training-label)
+  ;; negative
+  (loop for i from 0 to (1- training-label) do
+    ; (format t "Negative. Index: ~A~%" (index-of-learner training-label i (n-class-of mulc))) ;debug
+    (update (svref (learners-vector-of mulc) (index-of-learner training-label i (n-class-of mulc)))
+	    input -1d0))
+  ;; positive
+  (let ((start-index (sum-permutation (1- (n-class-of mulc)) training-label)))
+    (loop for j from start-index to (+ start-index (- (1- (n-class-of mulc)) training-label 1)) do
+      ; (format t "Positive. Index: ~A~%" j) ;debug
+      (update (svref (learners-vector-of mulc) j) input 1d0))))
