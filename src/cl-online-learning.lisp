@@ -3,7 +3,18 @@
 (in-package :cl-user)
 (defpackage :cl-online-learning
   (:use :cl :hjs.util.vector)
-  (:nicknames :cl-ol))
+  (:nicknames :cl-ol)
+  (:export
+   ;; Classes
+   :learner :perceptron :averaged-perceptron :svm :arow :scw1 :scw2
+   :multiclass-classifier :one-vs-rest :one-vs-one
+   ;; Methods
+   :predict :test :update :train :train-with-interim-test
+   ;; Constructors
+   :make-perceptron :make-averaged-perceptron
+   :make-svm :make-arow :make-scw1 :make-scw2
+   :make-one-vs-rest :make-one-vs-one))
+   
 
 (in-package :cl-online-learning)
 
@@ -475,16 +486,3 @@
     (loop for j from start-index to (+ start-index (- (1- (n-class-of mulc)) training-label 1)) do
       ; (format t "Positive. Index: ~A~%" j) ;debug
       (update (svref (learners-vector-of mulc) j) input 1d0))))
-
-
-;; ;;; make encode matrix
-;; (defun hamming-distance (vec1 vec2)
-;;   (let ((cnt 0))
-;;     (loop for i from 0 to (1- (length vec1)) do
-;;       (if (not (= (svref vec1 i) (svref vec2 i)))
-;; 	(incf cnt)))
-;;     cnt))
-
-;; (defparameter distance-vector (make-array 6 :element-type 'integer :initial-element 0))
-
-;; (defun search-minimum

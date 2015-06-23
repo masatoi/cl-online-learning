@@ -8,7 +8,7 @@
 (defsystem cl-online-learning
   :version "0.1"
   :author "Satoshi Imai"
-  :licence "LGPL"
+  :licence "MIT Licence"
   :encoding :utf-8
   :depends-on (:cl-ppcre :parse-number)
   :components ((:module "src"
@@ -16,7 +16,7 @@
 			((:file "utils")
 			 (:file "vector" :depends-on ("utils"))
 			 (:file "cl-online-learning" :depends-on ("utils" "vector"))
-			 )))
+			 (:file "cl-online-learning-utils"))))
   :description "Online Machine Learning for Common Lisp"
   :long-description
   #.(with-open-file (stream (merge-pathnames
