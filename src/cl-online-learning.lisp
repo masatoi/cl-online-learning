@@ -440,7 +440,7 @@
      (sum-permutation (1- L) i)
      -1))
 
-;; TODO: each sub-learner's predict is evaluated twice.
+;; TODO: each sub-learner's predict are evaluated twice.
 (defmethod predict ((mulc one-vs-one) input)
   (let ((max-cnt 0)
 	(max-class nil))
@@ -475,3 +475,16 @@
     (loop for j from start-index to (+ start-index (- (1- (n-class-of mulc)) training-label 1)) do
       ; (format t "Positive. Index: ~A~%" j) ;debug
       (update (svref (learners-vector-of mulc) j) input 1d0))))
+
+
+;; ;;; make encode matrix
+;; (defun hamming-distance (vec1 vec2)
+;;   (let ((cnt 0))
+;;     (loop for i from 0 to (1- (length vec1)) do
+;;       (if (not (= (svref vec1 i) (svref vec2 i)))
+;; 	(incf cnt)))
+;;     cnt))
+
+;; (defparameter distance-vector (make-array 6 :element-type 'integer :initial-element 0))
+
+;; (defun search-minimum

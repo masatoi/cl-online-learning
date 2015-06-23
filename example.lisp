@@ -1,28 +1,11 @@
 ;;; -*- coding:utf-8; mode:lisp -*-
 
-(in-package :cl-online-learning)
+(in-package :cl-user)
+(defpackage :cl-online-learning.examples
+  (:use :cl :cl-online-learning :cl-online-learning.utils)
+  (:nicknames :cl-ol.exam))
 
-;;; Read libsvm dataset
-(defun read-libsvm-data (data-path data-dimension)
-  (let ((data-list nil))
-    (with-open-file (f data-path :direction :input)
-      (labels ((read-loop (data-list)
-		 (let ((read-data (read-line f nil nil)))
-		   (if (null read-data)
-		     (nreverse data-list)
-		     (let* ((dv (make-array data-dimension :element-type 'double-float :initial-element 0d0))
-			    (d (ppcre:split "\\s+" read-data))
-			    (index-num-alist
-			     (mapcar (lambda (index-num-pair-str)
-				       (let ((index-num-pair (ppcre:split #\: index-num-pair-str)))
-					 (list (parse-integer (car index-num-pair))
-					       (coerce (parse-number:parse-number (cadr index-num-pair)) 'double-float))))
-				     (cdr d)))
-			    (training-label (coerce (parse-number:parse-number (car d)) 'double-float)))
-		       (dolist (index-num-pair index-num-alist)
-			 (setf (aref dv (1- (car index-num-pair))) (cadr index-num-pair)))
-		       (read-loop (cons (cons training-label dv) data-list)))))))
-	(read-loop data-list)))))
+(in-package :cl-online-learning.examples)
 
 ;;; a1a dataset
 
@@ -202,37 +185,6 @@
 
 ;;; Multiclass classifier
 
-;; Read libsvm dataset (Multiclass)
-(defun read-libsvm-data-multiclass (data-path data-dimension)
-  (let ((data-list nil))
-    (with-open-file (f data-path :direction :input)
-      (labels ((read-loop (data-list)
-		 (let ((read-data (read-line f nil nil)))
-		   (if (null read-data)
-		     (nreverse data-list)
-		     (let* ((dv (make-array data-dimension :element-type 'double-float :initial-element 0d0))
-			    (d (ppcre:split "\\s+" read-data))
-			    (index-num-alist
-			     (mapcar (lambda (index-num-pair-str)
-				       (let ((index-num-pair (ppcre:split #\: index-num-pair-str)))
-					 (list (parse-integer (car index-num-pair))
-					       (coerce (parse-number:parse-number (cadr index-num-pair)) 'double-float))))
-				     (cdr d)))
-			    (training-label (1- (parse-integer (car d)))))
-		       (dolist (index-num-pair index-num-alist)
-			 (setf (aref dv (1- (car index-num-pair))) (cadr index-num-pair)))
-		       (read-loop (cons (cons training-label dv) data-list)))))))
-	(read-loop data-list)))))
-
-;; Fisher–Yates shuffle
-(defun shuffle-vector (vec)
-  (loop for i from (1- (length vec)) downto 1 do
-    (let* ((j (random (1+ i)))
-	   (tmp (svref vec i)))
-      (setf (svref vec i) (svref vec j))
-      (setf (svref vec j) tmp)))
-  vec)
-
 ;; vectorize and shuffle iris data
 (defparameter iris
   (shuffle-vector
@@ -245,7 +197,12 @@
 (test mulc iris)
 
 ;; AROW (one-vs-rest)
-(defparameter mulc (make-one-vs-rest 4 3 'arow 0.05d0))
+(defparameter mulc (make-one-vs-rest 4 3 'arow 0.01d0))
+(train mulc iris)
+(test mulc iris)
+
+;; SCW-I (one-vs-rest)
+(defparameter mulc (make-one-vs-rest 4 3 'scw1 0.65d0 0.5d0))
 (train mulc iris)
 (test mulc iris)
 
@@ -259,6 +216,11 @@
 (train mulc iris)
 (test mulc iris)
 
+;; SCW-I (one-vs-one)
+(defparameter mulc (make-one-vs-one 4 3 'scw1 0.65d0 0.5d0))
+(train mulc iris)
+(test mulc iris)
+
 ;;; MNIST
 (defparameter mnist (read-libsvm-data-multiclass "/home/wiz/tmp/mnist" 780))
 (defparameter mnist+1 (mapcar (lambda (x)
@@ -268,10 +230,14 @@
 (defparameter mnist.t+1 (mapcar (lambda (x)
 				(cons (1+ (car x)) (cdr x))) mnist.t))
 
-(defparameter mulc (make-one-vs-rest 780 10 'arow 100000d0))
+(defparameter mulc (make-one-vs-rest 780 10 'arow 1d0))
 (train mulc mnist+1)
 (test mulc mnist.t+1)
 
-(defparameter mulc (make-one-vs-one 780 10 'arow 1000000d0d0))
+(defparameter mulc (make-one-vs-one 780 10 'arow 10000d0))
+(train mulc mnist+1)
+(test mulc mnist.t+1)
+
+(defparameter mulc (make-one-vs-one 780 10 'scw1 0.9d0 1000d0))
 (train mulc mnist+1)
 (test mulc mnist.t+1)
