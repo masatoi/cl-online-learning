@@ -1,7 +1,19 @@
-* Cl-Online-Learning 
+* Cl-Online-Learning
 
-** Usage
-see example.lisp
+A collection of online learning algorithms for Linear classifier written in Common Lisp.
+
+** Implemented algorithms
+
+*** Binary classifier
+Perceptron
+Averaged perceptron
+Linear SVM
+AROW
+SCW-I / SCW-II (Soft Confidence Weighted)
+
+*** Multiclass classifier
+one-vs-rest ( K binary classifier required )
+one-vs-one ( K*(K-1)/2 binary classifier required )
 
 ** Installation
 In shell,
@@ -13,3 +25,9 @@ In Lisp,
 #+BEGIN_SRC lisp
 (ql:quickload :cl-online-learning)
 #+END_SRC
+
+** Usage
+see example.lisp.
+
+** Licence
+This software is released under the MIT License, see LICENSE.txt.
