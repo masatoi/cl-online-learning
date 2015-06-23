@@ -5,15 +5,15 @@ A collection of online learning algorithms for Linear classifier written in Comm
 ** Implemented algorithms
 
 *** Binary classifier
-Perceptron
-Averaged perceptron
-Linear SVM
-AROW
-SCW-I / SCW-II (Soft Confidence Weighted)
+- Perceptron
+- Averaged perceptron
+- Linear SVM
+- AROW
+- SCW-I / SCW-II (Soft Confidence Weighted)
 
 *** Multiclass classifier
-one-vs-rest ( K binary classifier required )
-one-vs-one ( K*(K-1)/2 binary classifier required )
+- one-vs-rest ( K binary classifier required )
+- one-vs-one ( K*(K-1)/2 binary classifier required )
 
 ** Installation
 In shell,
