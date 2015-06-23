@@ -109,6 +109,7 @@
 
 (defun make-perceptron (input-dimension)
   (check-type input-dimension integer)
+  (assert (> input-dimension 0))
   (make-instance 'perceptron
      :input-dimension input-dimension
      :weight (make-dvec input-dimension 0d0)
@@ -132,6 +133,8 @@
 (defun make-averaged-perceptron (input-dimension data-size)
   (check-type input-dimension integer)
   (check-type data-size integer)
+  (assert (> input-dimension 0))
+  (assert (> data-size 0))
   (make-instance 'averaged-perceptron
      :input-dimension input-dimension
      :data-size data-size
@@ -169,6 +172,7 @@
 
 (defun make-svm (input-dimension learning-rate regularization-parameter)
   (check-type input-dimension integer)
+  (assert (> input-dimension 0))
   (check-type learning-rate double-float)
   (check-type regularization-parameter double-float)
   (make-instance 'svm
@@ -200,6 +204,7 @@
 
 (defun make-arow (input-dimension gamma)
   (check-type input-dimension integer)
+  (assert (> input-dimension 0))
   (check-type gamma double-float)
   (make-instance 'arow
      :input-dimension input-dimension
@@ -263,6 +268,7 @@
 
 (defun make-scw1 (input-dimension eta C)
   (check-type input-dimension integer)
+  (assert (> input-dimension 0))
   (check-type eta double-float)
   (check-type C double-float)
   (assert (< 0d0 eta 1d0))
@@ -329,6 +335,7 @@
 
 (defun make-scw2 (input-dimension eta C)
   (check-type input-dimension integer)
+  (assert (> input-dimension 0))
   (check-type eta double-float)
   (check-type C double-float)
   (assert (< 0d0 eta 1d0))
@@ -400,6 +407,10 @@
   learners-vector)
 
 (defun make-one-vs-rest (input-dimension n-class learner-type &rest learner-params)
+  (check-type input-dimension integer)
+  (check-type n-class integer)
+  (assert (> input-dimension 0))
+  (assert (> n-class 2))
   (let ((mulc (make-instance 'one-vs-rest
 		 :input-dimension input-dimension
 		 :n-class n-class
@@ -433,6 +444,10 @@
   learners-vector)
 
 (defun make-one-vs-one (input-dimension n-class learner-type &rest learner-params)
+  (check-type input-dimension integer)
+  (check-type n-class integer)
+  (assert (> input-dimension 0))
+  (assert (> n-class 2))
   (let* ((n-learner (/ (* n-class (1- n-class)) 2))
 	 (mulc (make-instance 'one-vs-one
 		  :input-dimension input-dimension
@@ -486,3 +501,15 @@
     (loop for j from start-index to (+ start-index (- (1- (n-class-of mulc)) training-label 1)) do
       ; (format t "Positive. Index: ~A~%" j) ;debug
       (update (svref (learners-vector-of mulc) j) input 1d0))))
+
+;; ;;; make encode matrix
+;; (defun hamming-distance (vec1 vec2)
+;;   (let ((cnt 0))
+;;     (loop for i from 0 to (1- (length vec1)) do
+;;       (if (not (= (svref vec1 i) (svref vec2 i)))
+;; 	(incf cnt)))
+;;     cnt))
+
+;; (defparameter distance-vector (make-array 6 :element-type 'integer :initial-element 0))
+
+;; (defun search-minimum

@@ -86,11 +86,13 @@ e.g.
 				      #+allegro
                                       (nth-value 2 (sys:variable-information vector env))
                                       #+sbcl
-                                      (nth-value 3 (sb-cltl2:variable-information vector env))
+				      (nth-value 3 (sb-cltl2:variable-information vector env))
 				      #+ccl
                                       (nth-value 3 (ccl:variable-information vector env))
                                       #+lispworks
                                       (nth-value 3 (cl::variable-information vector env))
+				      #-(or allegro sbcl ccl lispworks)
+				      nil
                                       ))
 			      (when type
 				`(simple-array ,type (*)))
@@ -186,11 +188,13 @@ e.g.
 					   #+allegro
                                            (nth-value 2 (sys:variable-information vector env))
                                            #+sbcl
-                                           (nth-value 3 (sb-cltl2:variable-information vector env))
+					   (nth-value 3 (sb-cltl2:variable-information vector env))
 					   #+ccl
 					   (nth-value 3 (ccl:variable-information vector env))
                                            #+lispworks
                                            (nth-value 3 (cl::variable-information vector env))
+					   #-(or allegro sbcl ccl lispworks)
+					   nil
                                            ))))
 			      (when vector-type-decl
 				`((type ,vector-type-decl ,vec-var)))))))
