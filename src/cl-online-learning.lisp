@@ -272,7 +272,7 @@
   (check-type eta double-float)
   (check-type C double-float)
   (assert (< 0d0 eta 1d0))
-  (let* ((phi (probit eta))
+  (let* ((phi (coerce (probit eta) 'double-float))
 	 (psi (+ 1d0 (/ (* phi phi) 2d0)))
 	 (zeta (+ 1d0 (* phi phi))))
     (make-instance 'scw1
@@ -339,7 +339,7 @@
   (check-type eta double-float)
   (check-type C double-float)
   (assert (< 0d0 eta 1d0))
-  (let ((phi (probit eta)))
+  (let ((phi (coerce (probit eta) 'double-float)))
     (make-instance 'scw2
        :input-dimension input-dimension
        :weight (make-dvec input-dimension 0d0)

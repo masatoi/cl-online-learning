@@ -10,7 +10,9 @@
   :author "Satoshi Imai"
   :licence "MIT Licence"
   :encoding :utf-8
-  :depends-on (:cl-ppcre :parse-number)
+  :depends-on (:cl-ppcre
+	       :parse-number
+	       #+sbcl :sb-cltl2)
   :components ((:module "src"
 			:components
 			((:file "utils")

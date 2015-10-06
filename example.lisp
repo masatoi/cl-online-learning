@@ -19,7 +19,7 @@
 
 ;; Perceptron
 (defparameter perceptron-learner (make-perceptron a1a-dim))
-(train perceptron-learner a1a-train)
+(defparameter perceptron-trainer (train perceptron-learner a1a-train))
 (test  perceptron-learner a1a-test)
 
 ;; Averaged Perceptron
@@ -46,6 +46,8 @@
 (defparameter scw2-learner (make-scw2 a1a-dim 0.8d0 0.1d0)) ; eta, C
 (train scw2-learner a1a-train)
 (test  scw2-learner a1a-test)
+
+
 
 ;;; a9a dataset
 
@@ -173,12 +175,12 @@
 (test  arow-learner cod-rna-test)
 
 ;; SCW1
-(defparameter scw1-learner (make-scw1 cod-rna-dim 0.5d0 0.000000000001d0))
+(defparameter scw1-learner (make-scw1 cod-rna-dim 0.51d0 1d0))
 (train scw1-learner cod-rna-train)
 (test  scw1-learner cod-rna-train)
 (test  scw1-learner cod-rna-test)
 
-(defparameter scw1-learner (make-scw1 cod-rna-dim 0.065d0 1d0))
+(defparameter scw1-learner (make-scw1 cod-rna-dim 0.85d0 1d0))
 (train scw1-learner cod-rna-train-shuffled)
 (test  scw1-learner cod-rna-train)
 (test  scw1-learner cod-rna-test)
@@ -191,42 +193,48 @@
    (coerce (read-libsvm-data-multiclass "/home/wiz/tmp/iris.scale" 4)
 	   'simple-vector)))
 
-;; Averaged Perceptron (one-vs-rest)
-(defparameter mulc (make-one-vs-rest 4 3 'averaged-perceptron (length iris)))
-(train mulc iris)
-(test mulc iris)
+(defparameter iris-train (loop for i from 0 to (1- 100) collect (svref iris i)))
+(defparameter iris-test (loop for i from 100 to (1- 150) collect (svref iris i)))  
 
-;; AROW (one-vs-rest)
-(defparameter mulc (make-one-vs-rest 4 3 'arow 0.01d0))
-(train mulc iris)
-(test mulc iris)
+;; one-vs-rest
 
-;; SCW-I (one-vs-rest)
-(defparameter mulc (make-one-vs-rest 4 3 'scw1 0.65d0 0.5d0))
-(train mulc iris)
-(test mulc iris)
+;; Averaged Perceptron
+(defparameter mul-percep (make-one-vs-rest 4 3 'perceptron))
+(train mul-percep iris-train)
+(test mul-percep iris-test)
 
-;; Averaged Perceptron (one-vs-one)
-(defparameter mulc (make-one-vs-one 4 3 'averaged-perceptron (length iris)))
-(train mulc iris)
-(test mulc iris)
+;; AROW
+(defparameter mul-arow (make-one-vs-rest 4 3 'arow 0.1d0))
+(train mul-arow iris-train)
+(test mul-arow iris-test)
 
-;; AROW (one-vs-one)
-(defparameter mulc (make-one-vs-one 4 3 'arow 0.05d0))
-(train mulc iris)
-(test mulc iris)
+;; SCW-I
+(defparameter mul-scw1 (make-one-vs-rest 4 3 'scw1 0.65d0 0.5d0))
+(train mul-scw1 iris-train)
+(test mul-scw1 iris-test)
 
-;; SCW-I (one-vs-one)
-(defparameter mulc (make-one-vs-one 4 3 'scw1 0.65d0 0.5d0))
-(train mulc iris)
-(test mulc iris)
+;; one-vs-one
+;; Averaged Perceptron
+(defparameter mul-percep (make-one-vs-one 4 3 'perceptron))
+(train mul-percep iris-train)
+(test mul-percep iris-test)
+
+;; AROW
+(defparameter mul-arow (make-one-vs-one 4 3 'arow 0.1d0))
+(train mul-arow iris-train)
+(test mul-arow iris-test)
+
+;; SCW-I
+(defparameter mul-scw1 (make-one-vs-one 4 3 'scw1 0.65d0 0.5d0))
+(train mul-scw1 iris-train)
+(test mul-scw1 iris-test)
 
 ;;; MNIST
-(defparameter mnist (read-libsvm-data-multiclass "/home/wiz/tmp/mnist" 780))
+(defparameter mnist (read-libsvm-data-multiclass "/home/wiz/tmp/mnist.scale" 780))
 (defparameter mnist+1 (mapcar (lambda (x)
 				(cons (1+ (car x)) (cdr x))) mnist))
 
-(defparameter mnist.t (read-libsvm-data-multiclass "/home/wiz/tmp/mnist.t" 780))
+(defparameter mnist.t (read-libsvm-data-multiclass "/home/wiz/tmp/mnist.scale.t" 780))
 (defparameter mnist.t+1 (mapcar (lambda (x)
 				(cons (1+ (car x)) (cdr x))) mnist.t))
 
@@ -234,10 +242,10 @@
 (train mulc mnist+1)
 (test mulc mnist.t+1)
 
-(defparameter mulc (make-one-vs-one 780 10 'arow 10000d0))
+(defparameter mulc (make-one-vs-one 780 10 'arow 10d0))
 (train mulc mnist+1)
 (test mulc mnist.t+1)
 
-(defparameter mulc (make-one-vs-one 780 10 'scw1 0.9d0 1000d0))
+(defparameter mulc (make-one-vs-one 780 10 'scw1 0.65d0 10d0))
 (train mulc mnist+1)
 (test mulc mnist.t+1)
