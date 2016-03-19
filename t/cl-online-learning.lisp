@@ -13,6 +13,14 @@
 
 (plan nil)
 
+(defun approximately-equal (x y &optional (delta 0.001d0))
+  (flet ((andf (x y) (and x y))
+         (close? (x y) (< (abs (- x y)) delta)))
+    (etypecase x
+      (double-float (close? x y))
+      (vector (reduce #'andf (map 'vector #'close? x y)))
+      (list (reduce #'andf (mapcar #'close? x y))))))
+
 ;; Test1: read libsvm dataset
 (is (progn
       (setf a1a
@@ -53,15 +61,16 @@
       -1.0d0 0.0d0 0.0d0 0.0d0 1.0d0 0.0d0 0.0d0 0.0d0 -2.0d0 0.0d0 0.0d0 0.0d0
       0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 -1.0d0 0.0d0 0.0d0 0.0d0 0.0d0 1.0d0
       0.0d0 0.0d0 0.0d0 0.0d0 0.0d0)
-    :test #'equalp)
+    :test #'approximately-equal)
 
-(is (cl-ol::bias-of perceptron-learner) -2.0d0)
+(is (cl-ol::bias-of perceptron-learner) -2.0d0 :test #'approximately-equal)
 
 ;; Test4: test perceptron learner
 (is (multiple-value-bind (accuracy n-correct n-total)
 	(test perceptron-learner a1a)
       (list accuracy n-correct n-total))
-    '(82.61682 1326 1605))
+    '(82.61682 1326 1605)
+    :test #'approximately-equal)
 
 ;; Test5,6 make and train averaged perceptron learner
 (defvar averaged-perceptron-learner)
@@ -103,15 +112,18 @@
       0.31090342679127736d0 0.0d0 0.0d0 -0.8143302180685358d0 0.0d0 0.0d0 0.0d0
       0.0d0 0.0d0 0.0d0 0.5595015576323987d0 0.0d0 0.0d0 -0.41495327102803736d0
       0.0d0 0.0d0 0.0d0 0.0d0 0.6255451713395639d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0)
-    :test #'equalp)
+    :test #'approximately-equal)
 
-(is (cl-ol::averaged-bias-of averaged-perceptron-learner) -1.397507788161997d0)
+(is (cl-ol::averaged-bias-of averaged-perceptron-learner)
+    -1.397507788161997d0
+    :test #'approximately-equal)
 
 ;; Test7: test averaged perceptron learner
 (is (multiple-value-bind (accuracy n-correct n-total)
 	(test averaged-perceptron-learner a1a)
       (list accuracy n-correct n-total))
-    '(84.17445 1351 1605))
+    '(84.17445 1351 1605)
+    :test #'approximately-equal)
 
 ;; Test8,9 make and train SVM learner
 (defvar svm-learner)
@@ -158,15 +170,18 @@
       -0.0013014053751485856d0 -0.00875278356258395d0 -0.008000970045530652d0 0.0d0
       0.0d0 0.0d0 0.008180596014072151d0 -0.018065112698466522d0 0.0d0 0.0d0 0.0d0
       0.0d0)
-    :test #'equalp)
+    :test #'approximately-equal)
 
-(is (cl-ol::bias-of svm-learner) -0.18887199483305964d0)
+(is (cl-ol::bias-of svm-learner)
+    -0.18887199483305964d0
+    :test #'approximately-equal)
 
 ;; Test10: test SVM learner
 (is (multiple-value-bind (accuracy n-correct n-total)
 	(test svm-learner a1a)
       (list accuracy n-correct n-total))
-    '(83.177574 1335 1605))
+    '(83.177574 1335 1605)
+    :test #'approximately-equal)
 
 ;; Test11,12 make and train AROW learner
 (defvar arow-learner)
@@ -213,15 +228,18 @@
       0.0d0 0.0029781893088766734d0 -0.07788005550719679d0 -0.07929624831761105d0
       0.0d0 0.0d0 -0.023263749059467584d0 0.105321438131757d0
       -0.14682343399467943d0 0.0d0 0.0d0 0.0d0 0.0d0)
-    :test #'equalp)
+    :test #'approximately-equal)
 
-(is (cl-ol::bias-of arow-learner) -0.11614147964826764d0)
+(is (cl-ol::bias-of arow-learner)
+    -0.11614147964826764d0
+    :test #'approximately-equal)
 
 ;; Test13: test AROW learner
 (is (multiple-value-bind (accuracy n-correct n-total)
 	(test arow-learner a1a)
       (list accuracy n-correct n-total))
-    '(84.85981 1362 1605))
+    '(84.85981 1362 1605)
+    :test #'approximately-equal)
 
 ;; Test14,15 make and train SCW-I learner
 (defvar scw1-learner)
@@ -263,15 +281,18 @@
       0.0d0 -0.35921664558291455d0 0.0d0 -0.1d0 0.0d0 -0.1d0 0.0d0
       -0.004009999408091602d0 -0.09096123283625236d0 0.0d0 0.1d0 -0.1d0 0.0d0 0.0d0
       0.0d0 0.0d0 0.1d0 -0.1d0 0.0d0 0.0d0 0.0d0 0.0d0)
-    :test #'equalp)
+    :test #'approximately-equal)
 
-(is (cl-ol::bias-of scw1-learner) -0.4139374405086192d0)
+(is (cl-ol::bias-of scw1-learner)
+    -0.4139374405086192d0
+    :test #'approximately-equal)
 
 ;; Test16: test SCW-I learner
 (is (multiple-value-bind (accuracy n-correct n-total)
 	(test scw1-learner a1a)
       (list accuracy n-correct n-total))
-    '(84.610596 1358 1605))
+    '(84.610596 1358 1605)
+    :test #'approximately-equal)
 
 ;; Test17,18 make and train SCW-II learner
 (defvar scw2-learner)
@@ -317,14 +338,17 @@
       0.0d0 -0.023947097706836798d0 -0.13155181519914805d0 -0.18035674534617752d0
       0.0d0 0.0d0 -0.06478330902974494d0 0.2470977967397556d0 -0.3045554304015999d0
       0.0d0 0.0d0 0.0d0 0.0d0)
-    :test #'equalp)
+    :test #'approximately-equal)
 
-(is (cl-ol::bias-of scw2-learner) -0.31820098518563744d0)
+(is (cl-ol::bias-of scw2-learner)
+    -0.31820098518563744d0
+    :test #'approximately-equal)
 
 ;; Test19: test SCW-II learner
 (is (multiple-value-bind (accuracy n-correct n-total)
 	(test scw2-learner a1a)
       (list accuracy n-correct n-total))
-    '(85.35825 1370 1605))
+    '(85.35825 1370 1605)
+    :test #'approximately-equal)
 
 (finalize)
