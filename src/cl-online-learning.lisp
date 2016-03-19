@@ -13,7 +13,7 @@
    ;; Constructors
    :make-perceptron :make-averaged-perceptron
    :make-svm :make-arow :make-scw1 :make-scw2
-   :make-one-vs-rest :make-one-vs-one))
+   :make-one-vs-rest :make-one-vs-one :make-ecoc))
    
 
 (in-package :cl-online-learning)
@@ -387,6 +387,75 @@
 		    (sigma0-of learner)))))))
   learner)
 
+;; ;;; AdaDelta
+
+;; (defclass$ adadelta (learner)
+;;   ;; Meta parameters
+;;   rho     ; Decay Rate
+;;   epsilon ; Small Constant
+;;   ;; Internal parameters
+;;   grad
+;;   g^2-acc delta-x^2-acc
+;;   g^2-acc0 delta-x^2-acc0
+;;   ;; misc
+;;   tmp-vec)
+
+;; (defun make-adadelta (input-dimension rho epsilon)
+;;   (check-type input-dimension integer)
+;;   (assert (> input-dimension 0))
+;;   (check-type rho double-float)
+;;   (check-type epsilon double-float)
+;;   (make-instance 'adadelta
+;;      :input-dimension input-dimension
+;;      :weight (make-dvec input-dimension 0d0)
+;;      :bias 0d0
+;;      :rho rho
+;;      :epsilon epsilon
+;;      :grad (make-dvec input-dimension 0d0)
+;;      :g^2-acc (make-dvec input-dimension 0d0)
+;;      :delta-x^2-acc (make-dvec input-dimension 0d0)
+;;      :g^2-acc0 0d0
+;;      :delta-x^2-acc0 0d0
+;;      :tmp-vec (make-dvec input-dimension 0d0)))
+
+;; (defmethod update ((learner adadelta) input training-label)
+;;   ;; calc gradient
+;;   (do-vec (g
+
+;;   (let* ((phi (phi-of learner))
+;; 	 (m (* training-label (f input (weight-of learner) (bias-of learner))))
+;; 	 (v (+ (sigma0-of learner)
+;; 	       (inner-product (diagonal-matrix-multiplication (sigma-of learner) input (tmp-vec1-of learner))
+;; 			      input)))
+;; 	 (loss (- (* phi (sqrt v)) m)))
+;;     (if (> loss 0d0)
+;;       (let* ((n (+ v (/ 1d0 (* 2d0 (C-of learner)))))
+;; 	     (gamma (* phi
+;; 		       (sqrt (+ (* phi phi m m v v)
+;; 				(* 4d0 n v (+ n (* v phi phi)))))))
+;; 	     (alpha (max 0d0
+;; 			 (/ (- gamma (+ (* 2d0 m n) (* phi phi m v)))
+;; 			    (* 2d0 (+ (* n n) (* n v phi phi))))))
+;; 	     (u (let ((base (- (sqrt (+ (* alpha alpha v v phi phi) (* 4d0 v))) (* alpha v phi))))
+;; 		  (/ (* base base) 4d0)))
+;; 	     (beta (/ (* alpha phi)
+;; 		      (+ (sqrt u) (* v alpha phi)))))
+;; 	;; Update weight
+;; 	(v-scale (tmp-vec1-of learner) (* alpha training-label) (tmp-vec2-of learner))
+;; 	(v+ (weight-of learner) (tmp-vec2-of learner) (weight-of learner))
+;; 	;; Update bias
+;; 	(setf (bias-of learner) (+ (bias-of learner) (* alpha (sigma0-of learner) training-label)))
+;; 	;; Update sigma
+;; 	(diagonal-matrix-multiplication (tmp-vec1-of learner) (tmp-vec1-of learner) (tmp-vec1-of learner))
+;; 	(v-scale (tmp-vec1-of learner) beta (tmp-vec1-of learner))
+;; 	(v- (sigma-of learner) (tmp-vec1-of learner) (sigma-of learner))
+;; 	;; Update sigma0
+;; 	(setf (sigma0-of learner)
+;; 	      (- (sigma0-of learner)
+;; 		 (* beta (sigma0-of learner)
+;; 		    (sigma0-of learner)))))))
+;;   learner)
+
 ;;;; Multiclass classifiers
 
 (defclass$ multiclass-classifier (learner) input-dimension n-class)
@@ -502,14 +571,144 @@
       ; (format t "Positive. Index: ~A~%" j) ;debug
       (update (svref (learners-vector-of mulc) j) input 1d0))))
 
-;; ;;; make encode matrix
-;; (defun hamming-distance (vec1 vec2)
-;;   (let ((cnt 0))
-;;     (loop for i from 0 to (1- (length vec1)) do
-;;       (if (not (= (svref vec1 i) (svref vec2 i)))
-;; 	(incf cnt)))
-;;     cnt))
+;;; ECOC
 
-;; (defparameter distance-vector (make-array 6 :element-type 'integer :initial-element 0))
+(defclass$ ecoc (multiclass-classifier)
+  n-learner
+  learners-vector
 
-;; (defun search-minimum
+  ; row: class, column: learner
+  codeword-matrix
+  tmp-vec)
+
+(defun equal-column? (mat j1 j2)
+  (let ((k (array-dimension mat 0))
+        (result t))
+    (loop for i from 0 to (1- k) do
+      (when (not (= (aref mat i j1) (aref mat i j2)))
+        (setf result nil)
+        (return result)))
+    result))
+
+(defun flip-column? (mat j1 j2)
+  (let ((k (array-dimension mat 0))
+        (result t))
+    (loop for i from 0 to (1- k) do
+      (when (= (aref mat i j1) (aref mat i j2))
+        (setf result nil)
+        (return result)))
+    result))
+
+(defun init-column-random! (mat j)
+  (loop for i from 0 to (1- (array-dimension mat 0)) do
+    (setf (aref mat i j) (random 2))))
+
+(defun valid-column? (mat j)
+  (if (zerop j)
+    t
+    (let ((result t))
+      (loop for k from 0 to (1- j) do
+        (when (or (equal-column? mat k j)
+                  (flip-column? mat k j))
+          (setf result nil)
+          (return result)))
+      result)))
+
+(defmacro until (test &rest body)
+  `(do ()
+    (,test)
+    ,@body))
+
+(defun init-codeword-matrix-random! (mat)
+  (loop for j from 0 to (1- (array-dimension mat 1)) do
+    (init-column-random! mat j)
+    (until (valid-column? mat j)
+      (init-column-random! mat j))))
+
+(defun hamming-distance-in (mat i k)
+  (loop for j from 0 to (1- (array-dimension mat 1))
+        counting (not (= (aref mat i j)
+                         (aref mat k j)))))
+
+;; (defparameter mat (make-array '(10 20)))
+;; (init-codeword-matrix-random! mat)
+
+;; (format t "~%")
+;; (loop for i from 1 to (1- (array-dimension mat 0)) do
+;;   (loop for k from 0 to (1- i) do
+;;     (format t "~3,D " (hamming-distance-in mat i k)))
+;;   (format t "~%"))
+
+(defun find-min-hamming-distance (mat)
+  (loop for i from 1 to (1- (array-dimension mat 0))
+        minimize
+        (loop for k from 0 to (1- i)
+              minimize
+              (hamming-distance-in mat i k))))
+
+(defun copy-mat! (mat result)
+  (loop for i from 0 to (1- (array-dimension mat 0)) do
+    (loop for j from 0 to (1- (array-dimension mat 1)) do
+      (setf (aref result i j) (aref mat i j)))))
+
+(defun n-times-random-mat (n n-class n-learner)
+  (let ((mat (make-array (list n-class n-learner)))
+        (best-mat (make-array (list n-class n-learner)))
+        (max-min-hd most-negative-fixnum))
+    (loop for i from 0 to (1- n) do
+      (init-codeword-matrix-random! mat)
+      (let ((min-hd (find-min-hamming-distance mat)))
+        ;; (format t "min-hd: ~A, max-min-hd: ~A~%" min-hd max-min-hd)
+        (when (> min-hd max-min-hd)
+          (setf max-min-hd min-hd)
+          (copy-mat! mat best-mat))))
+    best-mat))
+
+(defun make-ecoc (input-dimension n-class n-learner learner-type &rest learner-params)
+  (check-type input-dimension integer)
+  (check-type n-class integer)
+  (check-type n-learner integer)
+  (assert (> input-dimension 0))
+  (assert (> n-class 2))
+  (assert (>= n-learner (log n-class 2)))
+  (let ((mulc (make-instance 'ecoc
+                 :input-dimension input-dimension
+                 :n-class n-class
+                 :n-learner n-learner
+                 :learners-vector (make-array n-learner)
+                 :codeword-matrix (n-times-random-mat 10000 n-class n-learner)
+                 :tmp-vec (make-array n-learner :element-type 'bit))))
+    (loop for i from 0 to (1- n-learner) do
+      (setf (aref (learners-vector-of mulc) i)
+            (make-learner learner-type input-dimension learner-params)))
+    mulc))
+
+(defun hamming-distance (mat vec i)
+  (loop for j from 0 to (1- (length vec))
+        counting (not (= (aref vec j) (aref mat i j)))))
+
+(defmethod predict ((mulc ecoc) input)
+  (loop for j from 0 to (1- (n-learner-of mulc)) do
+    (let ((prediction (predict (svref (learners-vector-of mulc) j) input)))
+      (setf (aref (tmp-vec-of mulc) j)
+            (if (> prediction 0d0) 1 0))))
+  ;(format t "predict code: ~A~%" (tmp-vec-of mulc))
+  ;; TODO: case of multiple prediction have same hamming distance
+  (let ((min-hamming most-positive-fixnum)
+        min-hamming-i)
+    (loop for i from 0 to (1- (n-class-of mulc)) do
+      (let ((ham-dist (hamming-distance (codeword-matrix-of mulc) (tmp-vec-of mulc) i)))
+        ;(format t "i: ~A, ham-dist: ~A~%" i ham-dist)
+        (if (< ham-dist min-hamming)
+          (setf min-hamming ham-dist
+                min-hamming-i i))))
+    ;(format t "predict result: ~A~%" min-hamming-i)
+    min-hamming-i))
+
+;; training-label should be integer (0 ... K-1)
+(defmethod update ((mulc ecoc) input training-label)
+  ;(format t "training-label: ~A~%" training-label)
+  (loop for j from 0 to (1- (n-learner-of mulc)) do
+    ;(format t "update ~A learner, teach signal: ~A~%" j (if (= (aref (codeword-matrix-of mulc) training-label j) 1) 1d0 -1d0))
+    (update (aref (learners-vector-of mulc) j) input
+            (if (= (aref (codeword-matrix-of mulc) training-label j) 1) 1d0 -1d0))))

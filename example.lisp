@@ -47,8 +47,6 @@
 (train scw2-learner a1a-train)
 (test  scw2-learner a1a-test)
 
-
-
 ;;; a9a dataset
 
 ;; Fetch dataset
@@ -238,7 +236,7 @@
 (defparameter mnist.t+1 (mapcar (lambda (x)
 				(cons (1+ (car x)) (cdr x))) mnist.t))
 
-(defparameter mulc (make-one-vs-rest 780 10 'arow 1d0))
+(defparameter mulc (make-one-vs-rest 780 10 'arow 10d0))
 (train mulc mnist+1)
 (test mulc mnist.t+1)
 
@@ -249,3 +247,32 @@
 (defparameter mulc (make-one-vs-one 780 10 'scw1 0.65d0 10d0))
 (train mulc mnist+1)
 (test mulc mnist.t+1)
+
+(defparameter mulc (make-ecoc 780 10 100 'arow 10d0))
+(train mulc mnist+1)
+(test mulc mnist.t+1)
+
+(loop repeat 10 do
+  (defparameter mulc (make-ecoc 780 10 20 'perceptron))
+  (train mulc mnist+1)
+  (test mulc mnist.t+1))
+
+(loop repeat 10 do
+  (defparameter mulc (make-ecoc 780 10 20 'perceptron))
+  (print (cl-ol::codeword-matrix-of mulc)))
+
+(array-dimensions (cl-ol::codeword-matrix-of mulc))
+
+(car mnist+1)
+
+(loop for learner across (cl-ol::learners-vector-of mulc) collect
+  (predict learner (cdar mnist+1)))
+
+(print (cl-ol::codeword-matrix-of mulc))
+(update mulc (cdar mnist+1) (caar mnist+1))
+(predict mulc (cdar mnist+1))
+
+(defparameter mulc (make-one-vs-rest 780 10 'perceptron))
+(train mulc mnist+1)
+(test mulc mnist.t+1)
+
