@@ -267,7 +267,6 @@ e.g.
     (setf sr (+ ex ey)))
   result)
 
-
 ;;@ function-type: dvec -> dvec -> dvec -> dvec
 ;;@ precondition: x, y, and result are of same length
 ;;@ postcondition:

@@ -2,7 +2,7 @@
 
 (in-package :cl-user)
 (defpackage :cl-online-learning.examples
-  (:use :cl :cl-online-learning :cl-online-learning.utils)
+  (:use :cl :cl-online-learning.clos :cl-online-learning.utils)
   (:nicknames :cl-ol.exam))
 
 (in-package :cl-online-learning.examples)
@@ -19,8 +19,8 @@
 
 ;; Perceptron
 (defparameter perceptron-learner (make-perceptron a1a-dim))
-(defparameter perceptron-trainer (train perceptron-learner a1a-train))
-(test  perceptron-learner a1a-test)
+(time (train perceptron-learner a1a-train))
+(time (test  perceptron-learner a1a-test))
 
 ;; Averaged Perceptron
 (defparameter averaged-perceptron-learner (make-averaged-perceptron a1a-dim (length a1a-train)))
@@ -59,7 +59,7 @@
 
 ;; Perceptron
 (defparameter perceptron-learner (make-perceptron a9a-dim))
-(train perceptron-learner a9a-train)
+(time (loop repeat 1000 do (train perceptron-learner a9a-train)))
 (test  perceptron-learner a9a-test)
 
 ;; Averaged Perceptron
@@ -74,7 +74,7 @@
 
 ;; AROW
 (defparameter arow-learner (make-arow a9a-dim 10d0)) ; gamma
-(train arow-learner a9a-train)
+(time (loop repeat 1000 do (train arow-learner a9a-train)))
 (test  arow-learner a9a-test)
 
 ;; SCW-I
@@ -192,7 +192,7 @@
 	   'simple-vector)))
 
 (defparameter iris-train (loop for i from 0 to (1- 100) collect (svref iris i)))
-(defparameter iris-test (loop for i from 100 to (1- 150) collect (svref iris i)))  
+(defparameter iris-test (loop for i from 100 to (1- 150) collect (svref iris i)))
 
 ;; one-vs-rest
 
@@ -202,7 +202,7 @@
 (test mul-percep iris-test)
 
 ;; AROW
-(defparameter mul-arow (make-one-vs-rest 4 3 'arow 0.1d0))
+(defparameter mul-arow (make-one-vs-rest 4 3 'arow 10d0))
 (train mul-arow iris-train)
 (test mul-arow iris-test)
 
@@ -218,7 +218,7 @@
 (test mul-percep iris-test)
 
 ;; AROW
-(defparameter mul-arow (make-one-vs-one 4 3 'arow 0.1d0))
+(defparameter mul-arow (make-one-vs-one 4 3 'arow 10d0))
 (train mul-arow iris-train)
 (test mul-arow iris-test)
 
@@ -237,11 +237,11 @@
 				(cons (1+ (car x)) (cdr x))) mnist.t))
 
 (defparameter mulc (make-one-vs-rest 780 10 'arow 10d0))
-(train mulc mnist+1)
+(time (loop repeat 100 do (train mulc mnist+1)))
 (test mulc mnist.t+1)
 
 (defparameter mulc (make-one-vs-one 780 10 'arow 10d0))
-(train mulc mnist+1)
+(time (loop repeat 10 do (train mulc mnist+1)))
 (test mulc mnist.t+1)
 
 (defparameter mulc (make-one-vs-one 780 10 'scw1 0.65d0 10d0))
@@ -276,3 +276,54 @@
 (train mulc mnist+1)
 (test mulc mnist.t+1)
 
+
+;;; gisette 5000 dim, train: 6000, test: 1000
+
+(defparameter gisette-dim 5000)
+(defparameter gisette-train (read-libsvm-data "/home/wiz/datasets/gisette_scale" gisette-dim))
+(defparameter gisette-test (read-libsvm-data "/home/wiz/datasets/gisette_scale.t" gisette-dim))
+
+;; Perceptron
+(defparameter perceptron-learner (make-perceptron gisette-dim))
+(time (loop repeat 100 do (train perceptron-learner gisette-train)))
+(time (test  perceptron-learner gisette-test))
+
+;; Evaluation took:
+;;   3.017 seconds of real time
+;;   3.017943 seconds of total run time (3.010066 user, 0.007877 system)
+;;   [ Run times consist of 0.021 seconds GC time, and 2.997 seconds non-GC time. ]
+;;   100.03% CPU
+;;   10,233,336,642 processor cycles
+;;   28,835,840 bytes consed
+  
+;; Accuracy: 96.6%, Correct: 966, Total: 1000
+;; Evaluation took:
+;;   0.009 seconds of real time
+;;   0.008879 seconds of total run time (0.008879 user, 0.000000 system)
+;;   100.00% CPU
+;;   30,182,034 processor cycles
+;;   32,768 bytes consed
+
+;; Perceptron
+(defparameter arow-learner (make-arow gisette-dim 10d0))
+(time (loop repeat 100 do (train arow-learner gisette-train)))
+(time (test  arow-learner gisette-test))
+
+;; Evaluation took:
+;;   4.355 seconds of real time
+;;   4.355573 seconds of total run time (4.348276 user, 0.007297 system)
+;;   100.02% CPU
+;;   14,771,856,837 processor cycles
+;;   45,806,064 bytes consed
+  
+;; Accuracy: 98.1%, Correct: 981, Total: 1000
+;; Evaluation took:
+;;   0.007 seconds of real time
+;;   0.007051 seconds of total run time (0.007051 user, 0.000000 system)
+;;   100.00% CPU
+;;   24,060,710 processor cycles
+;;   32,768 bytes consed
+
+(defparameter averaged-perceptron-learner (make-averaged-perceptron gisette-dim (* 100 (length gisette-train))))
+(time (loop repeat 100 do (train averaged-perceptron-learner gisette-train)))
+(test  averaged-perceptron-learner gisette-test)
