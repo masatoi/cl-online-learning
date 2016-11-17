@@ -1,33 +1,116 @@
 * Cl-Online-Learning
 
-A collection of online learning algorithms for Linear classifier written in Common Lisp.
+A collection of online learning algorithms for Linear classification written in pure Common Lisp.
 
 ** Implemented algorithms
 
 *** Binary classifier
 - Perceptron
-- Averaged perceptron
-- Linear SVM
 - AROW
-- SCW-I / SCW-II (Soft Confidence Weighted)
+- SCW-I (Soft Confidence Weighted)
 
 *** Multiclass classifier
 - one-vs-rest ( K binary classifier required )
 - one-vs-one ( K*(K-1)/2 binary classifier required )
 
 ** Installation
-In shell,
 #+BEGIN_SRC 
 cd ~/quicklisp/local-projects/
 git clone https://github.com/masatoi/cl-online-learning.git
 #+END_SRC
-In Lisp,
+When using Roswell,
+#+BEGIN_SRC 
+ros install masatoi/cl-online-learning
+#+END_SRC
+** Usage
+*** Prepare dataset
+A data point is a pair of a class label (+1 or -1) and the input vector. e.g.
 #+BEGIN_SRC lisp
-(ql:quickload :cl-online-learning)
+'(-1.0d0 . #(0.0d0 0.0d0 1.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 1.0d0 0.0d0
+             0.0d0 1.0d0 0.0d0 0.0d0 0.0d0 0.0d0 1.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0
+             0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0
+             0.0d0 0.0d0 1.0d0 0.0d0 0.0d0 1.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0
+             0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 1.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0
+             0.0d0 0.0d0 0.0d0 1.0d0 0.0d0 0.0d0 1.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0
+             1.0d0 0.0d0 1.0d0 1.0d0 0.0d0 0.0d0 0.0d0 1.0d0 0.0d0 0.0d0 1.0d0 0.0d0
+             0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0
+             0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0
+             0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0
+             0.0d0 0.0d0 0.0d0))
+#+END_SRC
+And dataset is represented as a sequence of data points.
+READ-LIBSVM-DATA function is available to make a dataset from a sparse format used in LIBSVM (http://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/). This function requires the number of features of that dataset.
+#+BEGIN_SRC lisp
+(defparameter a1a-dim 123)
+(defparameter a1a
+  (clol.utils:read-libsvm-data
+   (merge-pathnames #P"t/dataset/a1a" (asdf:system-source-directory :cl-online-learning))
+   a1a-dim))
 #+END_SRC
 
-** Usage
-see example.lisp.
+*** Define learner
+A learner object is just a struct, therefore their constructors are available such as MAKE-PERCEPTRON, MAKE-AROW and MAKE-SCW.
+#+BEGIN_SRC lisp
+(defparameter arow-learner (clol:make-arow a1a-dim 10d0))
+#+END_SRC
+
+*** Update and Train
+To update the model destructively with one data point, use the update function corresponding to the model type.
+#+BEGIN_SRC lisp
+(clol:arow-update arow-learner
+                  (cdar a1a)  ; input
+                  (caar a1a)) ; label
+#+END_SRC
+TRAIN function can be used to learn the dataset collectively.
+#+BEGIN_SRC lisp
+(clol:train arow-learner a1a)
+#+END_SRC
+It may be necessary to call this function several times until learning converges.
+
+*** Predict and Test
+#+BEGIN_SRC lisp
+(clol:arow-predict arow-learner (cdar a1a))
+; => -1.0d0
+
+(clol:test arow-learner a1a)
+; Accuracy: 84.85981%, Correct: 1362, Total: 1605
+#+END_SRC
+
+*** Multiclass classification
+For multiclass data, the label of a data point is an integer representing the index of the class. 
+#+BEGIN_SRC lisp
+(defparameter iris-dim 4)
+
+; A dataset in which the same label appears consecutively need to shuffle
+(defparameter iris
+  (clol.utils:shuffle-vector
+   (coerce (clol.utils:read-libsvm-data-multiclass
+            (merge-pathnames #P"t/dataset/iris.scale"
+                             (asdf:system-source-directory :cl-online-learning))
+            iris-dim)
+	   'simple-vector)))
+
+(defparameter iris-train (subseq iris 0 100))
+(defparameter iris-test (subseq iris 100))
+#+END_SRC
+ONE-VS-REST and ONE-VS-ONE are available for multiclass classification by using multiple binary classifiers. In many cases, ONE-VS-ONE is more accurate, but it requires more computational resource as the number of classes increases.
+#+BEGIN_SRC lisp
+;; Define model
+(defparameter arow-1vs1
+  (clol:make-one-vs-one iris-dim      ; Input data dimension
+                        3             ; Number of class
+                        'arow 0.1d0)) ; Binary classifier type and its parameters
+
+;; Train and test model
+(clol:train arow-1vs1 iris-train)
+(clol:test  arow-1vs1 iris-test)
+; Accuracy: 98.0%, Correct: 49, Total: 50
+#+END_SRC
+
+# *** Benchimark
+
+** Author
+Satoshi Imai (satoshi.imai@gmail.com)
 
 ** Licence
 This software is released under the MIT License, see LICENSE.txt.

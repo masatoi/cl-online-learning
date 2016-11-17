@@ -236,13 +236,15 @@
 
 ;;; Multi class
 
+(defparameter iris-dim 4)
+
 (defparameter iris
   (shuffle-vector
-   (coerce (read-libsvm-data-multiclass "/home/wiz/tmp/iris.scale" 4)
+   (coerce (read-libsvm-data-multiclass "/home/wiz/tmp/iris.scale" iris-dim)
 	   'simple-vector)))
 
-(defparameter iris-train (loop for i from 0 to (1- 100) collect (svref iris i)))
-(defparameter iris-test (loop for i from 100 to (1- 150) collect (svref iris i)))
+(defparameter iris-train (subseq iris 0 100))
+(defparameter iris-test (subseq iris 100))
 
 ;; one-vs-rest
 (defparameter mulc (make-one-vs-rest 780 10 'arow 10d0))
@@ -290,10 +292,24 @@
    (coerce (clol.utils:read-libsvm-data-multiclass "/home/wiz/tmp/iris.scale" 4)
 	   'simple-vector)))
 
+
+(defparameter iris-dim 4)
+
+(defparameter iris
+  (clol.utils:shuffle-vector
+   (coerce (clol.utils:read-libsvm-data-multiclass
+            (merge-pathnames #P"t/dataset/iris.scale"
+                             (asdf:system-source-directory :cl-online-learning))
+            iris-dim)
+	   'simple-vector)))
+
 (defparameter iris-train (loop for i from 0 to (1- 100) collect (svref iris i)))
 (defparameter iris-test (loop for i from 100 to (1- 150) collect (svref iris i)))
 
-(defparameter mul-arow (clol:make-one-vs-rest 4 3 'arow 10d0))
+(defparameter arow-1-vs-rest
+  (clol:make-one-vs-rest iris-dim     ; Input data dimension
+                         3            ; Number of class
+                         'arow 10d0)) ; Binary classifier type and its parameters
 (clol:train mul-arow iris-train)
 (clol:test mul-arow iris-test)
 
