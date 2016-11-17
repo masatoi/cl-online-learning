@@ -24,20 +24,8 @@ ros install masatoi/cl-online-learning
 #+END_SRC
 ** Usage
 *** Prepare dataset
-A data point is a pair of a class label (+1 or -1) and the input vector. e.g.
-#+BEGIN_SRC lisp
-'(-1.0d0 . #(0.0d0 0.0d0 1.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 1.0d0 0.0d0
-             0.0d0 1.0d0 0.0d0 0.0d0 0.0d0 0.0d0 1.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0
-             0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0
-             0.0d0 0.0d0 1.0d0 0.0d0 0.0d0 1.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0
-             0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 1.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0
-             0.0d0 0.0d0 0.0d0 1.0d0 0.0d0 0.0d0 1.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0
-             1.0d0 0.0d0 1.0d0 1.0d0 0.0d0 0.0d0 0.0d0 1.0d0 0.0d0 0.0d0 1.0d0 0.0d0
-             0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0
-             0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0
-             0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0
-             0.0d0 0.0d0 0.0d0))
-#+END_SRC
+A data point is a pair of a class label (+1 or -1) and the input vector.
+
 And dataset is represented as a sequence of data points.
 READ-LIBSVM-DATA function is available to make a dataset from a sparse format used in LIBSVM (http://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/). This function requires the number of features of that dataset.
 #+BEGIN_SRC lisp
@@ -49,7 +37,7 @@ READ-LIBSVM-DATA function is available to make a dataset from a sparse format us
 #+END_SRC
 
 *** Define learner
-A learner object is just a struct, therefore their constructors are available such as MAKE-PERCEPTRON, MAKE-AROW and MAKE-SCW.
+A learner object is just a struct, therefore their constructor is available to make it.
 #+BEGIN_SRC lisp
 (defparameter arow-learner (clol:make-arow a1a-dim 10d0))
 #+END_SRC
