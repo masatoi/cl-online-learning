@@ -2,41 +2,61 @@
 ;;;;;;;;;;;;;;;;;;;; Examples ;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defpackage :cl-online-learning.struct.examples
-  (:use :cl :cl-online-learning :cl-online-learning.utils)
-  (:nicknames :cl-ol.st.exam))
+(in-package :cl-user)
 
-(in-package :cl-online-learning.struct.examples)
+(defpackage :cl-online-learning.examples
+  (:use :cl :cl-online-learning :cl-online-learning.utils)
+  (:nicknames :clol.exam))
+
+(in-package :cl-online-learning.examples)
+
+;;; Binary classification, Dence data
 
 (defparameter a1a-dim 123)
 (defparameter a1a-train (read-libsvm-data "/home/wiz/tmp/a1a" a1a-dim))
 (defparameter a1a-test (read-libsvm-data "/home/wiz/tmp/a1a.t" a1a-dim))
 
 (defparameter perceptron-learner (make-perceptron a1a-dim))
-(time (loop repeat 100 do (perceptron-train perceptron-learner a1a-train)))
-(perceptron-test perceptron-learner a1a-test)
+(train perceptron-learner a1a-train)
+(test perceptron-learner a1a-test)
 
-;; Evaluation took:
-;;   0.033 seconds of real time
-;;   0.032494 seconds of total run time (0.032494 user, 0.000000 system)
-;;   96.97% CPU
-;;   110,237,150 processor cycles
-;;   8,257,536 bytes consed
+(defparameter arow-learner (make-arow a1a-dim 10d0))
+(train arow-learner a1a-train)
+(test arow-learner a1a-test)
 
-;; Accuracy: 82.416985%, Correct: 25513, Total: 30956
+(defparameter scw-learner (make-scw  a1a-dim 0.9d0 0.1d0))
+(train scw-learner a1a-train)
+(test scw-learner a1a-test)
 
-(defparameter one-vs-rest-learner (make-one-vs-rest 10 5 'arow 10d0))
-(defparameter perceptron-learner (make-perceptron a1a-dim))
-(time (loop repeat 100 do (perceptron-train perceptron-learner a1a-train)))
-(perceptron-test perceptron-learner a1a-test)
+;;; Binary classification, Sparse data
+
+(defparameter sparse-a1a-train (read-libsvm-data-sparse "/home/wiz/tmp/a1a"))
+(defparameter sparse-a1a-test (read-libsvm-data-sparse "/home/wiz/tmp/a1a.t"))
+
+(defparameter sparse-perceptron-learner (make-sparse-perceptron a1a-dim))
+(train sparse-perceptron-learner sparse-a1a-train)
+(test sparse-perceptron-learner sparse-a1a-test)
+
+(defparameter sparse-arow-learner (make-sparse-arow a1a-dim 10d0))
+(train sparse-arow-learner sparse-a1a-train)
+(test sparse-arow-learner sparse-a1a-test)
+
+(defparameter sparse-scw-learner (make-sparse-scw a1a-dim 0.9d0 0.1d0))
+(train sparse-scw-learner sparse-a1a-train)
+(sparse-scw-test sparse-scw-learner sparse-a1a-test)
+
+;;; Multiclass classification, Dence data
 
 (defparameter a9a-dim 123)
+
 (defparameter a9a-train (read-libsvm-data "/home/wiz/tmp/a9a" a9a-dim))
 (defparameter a9a-test (read-libsvm-data "/home/wiz/tmp/a9a.t" a9a-dim))
 
 (defparameter perceptron-learner (make-perceptron a9a-dim))
 (time (loop repeat 1000 do (train perceptron-learner a9a-train)))
 (test perceptron-learner a9a-test)
+
+;; Accuracy: 79.72483%, Correct: 12980, Total: 16281
 
 ;;; struct version
 ;; Evaluation took:
@@ -63,8 +83,6 @@
 ;;   16,420,864,642 processor cycles
 ;;   1,674,411,648 bytes consed
 
-
-
 ;;; CLOS version
 ;; Evaluation took:
 ;;   7.647 seconds of real time
@@ -74,9 +92,27 @@
 ;;   25,939,324,287 processor cycles
 ;;   1,674,404,304 bytes consed
 
+(defparameter a9a-train.sp (read-libsvm-data-sparse "/home/wiz/tmp/a9a"))
+(defparameter a9a-test.sp  (read-libsvm-data-sparse "/home/wiz/tmp/a9a.t"))
+
+(defparameter perceptron-learner.sp (make-sparse-perceptron a9a-dim))
+(time (loop repeat 1000 do (train perceptron-learner.sp a9a-train.sp)))
+(test perceptron-learner.sp a9a-test.sp)
+
+;;; Sparse version
+;; Evaluation took:
+;;   1.850 seconds of real time
+;;   1.854306 seconds of total run time (1.854306 user, 0.000000 system)
+;;   [ Run times consist of 0.024 seconds GC time, and 1.831 seconds non-GC time. ]
+;;   100.22% CPU
+;;   6,275,038,645 processor cycles
+;;   1,674,553,424 bytes consed
+
 (defparameter arow-learner (make-arow a9a-dim 10d0))
 (time (loop repeat 1000 do (train arow-learner a9a-train)))
 (test arow-learner a9a-test)
+
+;; Accuracy: 84.964066%, Correct: 13833, Total: 16281
 
 ;;; struct version
 ;; Evaluation took:
@@ -105,12 +141,12 @@
 ;;   5,881,035,456 bytes consed
 
 ;; Evaluation took:
-;;   15.106 seconds of real time
-;;   15.115968 seconds of total run time (15.108628 user, 0.007340 system)
-;;   [ Run times consist of 0.069 seconds GC time, and 15.047 seconds non-GC time. ]
+;;   14.978 seconds of real time
+;;   14.987884 seconds of total run time (14.987565 user, 0.000319 system)
+;;   [ Run times consist of 0.040 seconds GC time, and 14.948 seconds non-GC time. ]
 ;;   100.07% CPU
-;;   51,243,139,014 processor cycles
-;;   5,881,064,032 bytes consed
+;;   50,808,360,960 processor cycles
+;;   5,881,124,352 bytes consed
 
 ;;; CLOS version
 ;; Evaluation took:
@@ -121,9 +157,23 @@
 ;;   105,792,514,974 processor cycles
 ;;   5,881,026,464 bytes consed
 
-(defparameter scw1-learner (make-scw1 a9a-dim 0.9d0 0.1d0))
-(time (loop repeat 1000 do (train scw1-learner a9a-train)))
-(test scw1-learner a9a-test)
+(defparameter arow-learner.sp (make-sparse-arow a9a-dim 10d0))
+(time (loop repeat 1000 do (train arow-learner.sp a9a-train.sp)))
+(test arow-learner.sp a9a-test.sp)
+
+;; Evaluation took:
+;;   5.300 seconds of real time
+;;   5.304542 seconds of total run time (5.289788 user, 0.014754 system)
+;;   [ Run times consist of 0.081 seconds GC time, and 5.224 seconds non-GC time. ]
+;;   100.09% CPU
+;;   17,976,932,767 processor cycles
+;;   5,881,157,952 bytes consed
+
+(defparameter scw-learner (make-scw a9a-dim 0.9d0 0.1d0))
+(time (loop repeat 1000 do (train scw-learner a9a-train)))
+(test scw-learner a9a-test)
+
+;; Accuracy: 83.98133%, Correct: 13673, Total: 16281
 
 ;; Evaluation took:
 ;;   13.235 seconds of real time
@@ -132,6 +182,18 @@
 ;;   100.09% CPU
 ;;   44,896,182,054 processor cycles
 ;;   7,375,026,592 bytes consed
+
+(defparameter scw-learner.sp (make-sparse-scw a9a-dim 0.9d0 0.1d0))
+(time (loop repeat 1000 do (train scw-learner.sp a9a-train.sp)))
+(test scw-learner.sp a9a-test.sp)
+
+;; Evaluation took:
+;;   5.443 seconds of real time
+;;   5.450985 seconds of total run time (5.439000 user, 0.011985 system)
+;;   [ Run times consist of 0.105 seconds GC time, and 5.346 seconds non-GC time. ]
+;;   100.15% CPU
+;;   18,461,632,884 processor cycles
+;;   7,375,126,240 bytes consed
 
 ;;; AROW++
 ;; ~/datasets $ arow_learn -i 1000 a9a a9a.arow.model
@@ -147,92 +209,6 @@
 				       :mode :alloc
 				       :report :flat)
   (loop repeat 1000 do (arow-train arow-learner a9a-train)))
-
-
-;; inline
-
-;; Evaluation took:
-;;   4.897 seconds of real time
-;;   4.900393 seconds of total run time (4.882436 user, 0.017957 system)
-;;   [ Run times consist of 0.065 seconds GC time, and 4.836 seconds non-GC time. ]
-;;   100.06% CPU
-;;   16,611,290,450 processor cycles
-;;   1,674,403,728 bytes consed
-  
-;; Accuracy: 79.72483%, Correct: 12980, Total: 16281
-;; Evaluation took:
-;;   15.734 seconds of real time
-;;   15.743037 seconds of total run time (15.715719 user, 0.027318 system)
-;;   [ Run times consist of 0.070 seconds GC time, and 15.674 seconds non-GC time. ]
-;;   100.06% CPU
-;;   53,370,435,311 processor cycles
-;;   5,881,035,456 bytes consed
-  
-;; Accuracy: 84.964066%, Correct: 13833, Total: 16281
-;; Evaluation took:
-;;   13.888 seconds of real time
-;;   13.900793 seconds of total run time (13.865083 user, 0.035710 system)
-;;   [ Run times consist of 0.097 seconds GC time, and 13.804 seconds non-GC time. ]
-;;   100.09% CPU
-;;   47,111,367,519 processor cycles
-;;   7,457,269,824 bytes consed
-
-;; no inline
-
-;; Accuracy: 79.72483%, Correct: 12980, Total: 16281
-;; Evaluation took:
-;;   4.855 seconds of real time
-;;   4.858373 seconds of total run time (4.854418 user, 0.003955 system)
-;;   [ Run times consist of 0.018 seconds GC time, and 4.841 seconds non-GC time. ]
-;;   100.06% CPU
-;;   16,468,458,253 processor cycles
-;;   1,674,411,648 bytes consed
-  
-;; Accuracy: 79.72483%, Correct: 12980, Total: 16281
-;; Evaluation took:
-;;   14.896 seconds of real time
-;;   14.904901 seconds of total run time (14.892879 user, 0.012022 system)
-;;   [ Run times consist of 0.072 seconds GC time, and 14.833 seconds non-GC time. ]
-;;   100.06% CPU
-;;   50,530,172,355 processor cycles
-;;   5,881,030,720 bytes consed
-  
-;; Accuracy: 84.964066%, Correct: 13833, Total: 16281
-;; Evaluation took:
-;;   13.324 seconds of real time
-;;   13.333265 seconds of total run time (13.317252 user, 0.016013 system)
-;;   [ Run times consist of 0.089 seconds GC time, and 13.245 seconds non-GC time. ]
-;;   100.07% CPU
-;;   45,196,042,976 processor cycles
-;;   7,375,022,144 bytes consed
-
-;; Accuracy: 79.72483%, Correct: 12980, Total: 16281
-;; Evaluation took:
-;;   4.756 seconds of real time
-;;   4.759471 seconds of total run time (4.759471 user, 0.000000 system)
-;;   [ Run times consist of 0.017 seconds GC time, and 4.743 seconds non-GC time. ]
-;;   100.06% CPU
-;;   16,134,008,169 processor cycles
-;;   1,674,411,648 bytes consed
-  
-;; Accuracy: 79.72483%, Correct: 12980, Total: 16281
-;; Evaluation took:
-;;   14.781 seconds of real time
-;;   14.791067 seconds of total run time (14.791067 user, 0.000000 system)
-;;   [ Run times consist of 0.067 seconds GC time, and 14.725 seconds non-GC time. ]
-;;   100.07% CPU
-;;   50,138,829,951 processor cycles
-;;   5,881,030,720 bytes consed
-  
-;; Accuracy: 84.964066%, Correct: 13833, Total: 16281
-;; Evaluation took:
-;;   13.408 seconds of real time
-;;   13.417955 seconds of total run time (13.386376 user, 0.031579 system)
-;;   [ Run times consist of 0.095 seconds GC time, and 13.323 seconds non-GC time. ]
-;;   100.07% CPU
-;;   45,480,948,294 processor cycles
-;;   7,375,022,016 bytes consed
-
 
 ;;; Multi class
 
@@ -264,59 +240,30 @@
 (train mul-arow iris-train)
 (test mul-arow iris-test)
 
-;;; news20
-(defparameter news20 (read-libsvm-data-multiclass "/home/wiz/datasets/news20.scale" 62060))
+;;;;; news20 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defparameter news20
-  (coerce (read-libsvm-data-multiclass "/home/wiz/datasets/news20.scale" 4)
-          'simple-vector)))
+(in-package :clol.exam)
 
+(defparameter news20-dim 62060)
+(defparameter news20-train (read-libsvm-data-sparse-multiclass "/home/wiz/datasets/news20.scale"))
+(defparameter news20-test (read-libsvm-data-sparse-multiclass "/home/wiz/datasets/news20.t.scale"))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defparameter news20-arow (make-one-vs-one news20-dim 20 'sparse-arow 1d0))
+(loop repeat 10 do
+  (train news20-arow news20-train)
+  (test news20-arow news20-test))
 
-(in-package :cl-user)
+(defparameter news20-arow-1vr (make-one-vs-rest news20-dim 20 'sparse-arow 10d0))
+(loop repeat 10 do
+  (train news20-arow-1vr news20-train)
+  (test news20-arow-1vr news20-test))
 
-(defparameter a1a-dim 123)
-(defparameter a1a-train (clol.utils:read-libsvm-data "/home/wiz/tmp/a1a" a1a-dim))
-(defparameter a1a-test (clol.utils:read-libsvm-data "/home/wiz/tmp/a1a.t" a1a-dim))
+;;; Almost data dimension < 500
+;; (ql:quickload :clgplot)
+;; (clgp:plot-histogram
+;;  (mapcar (lambda (x)
+;;            (clol.vector::sparse-vector-length (cdr x)))
+;;          news20-train)
+;;  200)
 
-(defparameter perceptron-learner (clol:make-perceptron a1a-dim))
-(time (loop repeat 100 do (clol:perceptron-train perceptron-learner a1a-train)))
-(clol:test perceptron-learner a1a-test)
-
-(clol:perceptron-update perceptron-learner (cdadr a1a-test) (caadr a1a-test))
-(clol:perceptron-predict perceptron-learner (cdadr a1a-test))
-
-(defparameter iris
-  (clol.utils:shuffle-vector
-   (coerce (clol.utils:read-libsvm-data-multiclass "/home/wiz/tmp/iris.scale" 4)
-	   'simple-vector)))
-
-
-(defparameter iris-dim 4)
-
-(defparameter iris
-  (clol.utils:shuffle-vector
-   (coerce (clol.utils:read-libsvm-data-multiclass
-            (merge-pathnames #P"t/dataset/iris.scale"
-                             (asdf:system-source-directory :cl-online-learning))
-            iris-dim)
-	   'simple-vector)))
-
-(defparameter iris-train (loop for i from 0 to (1- 100) collect (svref iris i)))
-(defparameter iris-test (loop for i from 100 to (1- 150) collect (svref iris i)))
-
-(defparameter arow-1-vs-rest
-  (clol:make-one-vs-rest iris-dim     ; Input data dimension
-                         3            ; Number of class
-                         'arow 10d0)) ; Binary classifier type and its parameters
-(clol:train mul-arow iris-train)
-(clol:test mul-arow iris-test)
-
-(defparameter mul-arow (clol:make-one-vs-one 4 3 'arow 10d0))
-(clol:train mul-arow cl-ol.exam::iris-train)
-(clol:test mul-arow cl-ol.exam::iris-test)
-
-(defparameter mulc (clol:make-one-vs-one 780 10 'arow 10d0))
-(time (loop repeat 10 do (clol:train mulc cl-ol.exam::mnist+1)))
-(clol:test mulc cl-ol.exam::mnist.t+1)
+;;;;; news20.binary ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

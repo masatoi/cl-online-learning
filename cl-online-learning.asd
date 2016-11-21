@@ -6,20 +6,17 @@
 (in-package :cl-online-learning-asd)
 
 (defsystem cl-online-learning
-  :version "0.2"
+  :version "0.3"
   :author "Satoshi Imai"
   :licence "MIT Licence"
   :encoding :utf-8
   :depends-on (:cl-ppcre :parse-number)
   :components ((:module "src"
 			:components
-			((:file "utils")
-                         (:file "cl-online-learning")
-                         ;; ;; for CLOS version
-                         ;; (:file "utils-meta")
-                         ;; (:file "vector" :depends-on ("utils-meta"))
-                         ;; (:file "clos" :depends-on ("vector"))
-			 )))
+			((:file "vector")
+                         (:file "utils" :depends-on ("vector"))
+                         (:file "cl-online-learning" :depends-on ("vector")))
+                        ))
   :description "Online Machine Learning for Common Lisp"
   :long-description
   #.(with-open-file (stream (merge-pathnames

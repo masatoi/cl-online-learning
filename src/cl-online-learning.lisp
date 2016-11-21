@@ -4,65 +4,25 @@
 
 (in-package :cl-user)
 (defpackage :cl-online-learning
-  (:use :cl)
+  (:use :cl :cl-online-learning.vector)
   (:nicknames :clol)
   (:export
    :train :test
    :make-perceptron :perceptron-update :perceptron-train :perceptron-predict :perceptron-test
    :make-arow :arow-update :arow-train :arow-predict :arow-test
    :make-scw :scw-update :scw-train :scw-predict :scw-test
+   :make-sparse-perceptron :sparse-perceptron-update :sparse-perceptron-train
+   :sparse-perceptron-predict :sparse-perceptron-test
+   :make-sparse-arow :sparse-arow-update :sparse-arow-train :sparse-arow-predict :sparse-arow-test
+   :make-sparse-scw :sparse-scw-update :sparse-scw-train :sparse-scw-predict :sparse-scw-test
    :make-one-vs-rest :one-vs-rest-update :one-vs-rest-train :one-vs-rest-predict :one-vs-rest-test
    :make-one-vs-one :one-vs-one-update :one-vs-one-train :one-vs-one-predict :one-vs-one-test))
 
 (in-package :cl-online-learning)
 
 ;;; Utils
-
 (defmacro catstr (str1 str2)
   `(concatenate 'string ,str1 ,str2))
-
-;;; Calculation functions
-
-(defun v+ (x y result)
-  (declare (type (simple-array double-float) x y result)
-           (optimize (speed 3) (safety 0)))
-  (loop for i from 0 to (1- (length x)) do
-    (setf (aref result i) (+ (aref x i) (aref y i))))
-  result)
-
-(defun v- (x y result)
-  (declare (type (simple-array double-float) x y result)
-           (optimize (speed 3) (safety 0)))
-  (loop for i from 0 to (1- (length x)) do
-    (setf (aref result i) (- (aref x i) (aref y i))))
-  result)
-
-(defun v-scale (vec n result)
-  (declare (type double-float n)
-	   (type (simple-array double-float) vec result)
-           (optimize (speed 3) (safety 0)))
-  (loop for i from 0 to (1- (length vec)) do
-    (setf (aref result i) (* n (aref vec i))))
-  result)
-
-(defun elementwise-product (x y result)
-  (declare (type (simple-array double-float) x y result)
-           (optimize (speed 3) (safety 0)))
-  (loop for i from 0 to (1- (length x)) do
-    (setf (aref result i) (* (aref x i) (aref y i))))
-  result)
-
-(declaim (ftype (function ((simple-array double-float) (simple-array double-float))
-                          double-float)
-                inner-product))
-(defun inner-product (x y)
-  (declare (type (simple-array double-float) x y)
-           (optimize (speed 3) (safety 0)))
-  (let ((result 0.0d0))
-    (declare (type double-float result))
-    (loop for i from 0 to (1- (length x)) do
-      (incf result (* (aref x i) (aref y i))))
-    result))
 
 ;;; Signum
 (defmacro sign (x)
@@ -71,9 +31,6 @@
 ;;; Decision boundary
 (defmacro f (input weight bias)
   `(+ (inner-product ,weight ,input) ,bias))
-
-(defun make-dvec (input-dimension initial-element)
-  (make-array input-dimension :element-type 'double-float :initial-element initial-element))
 
 ;;; Define learner functions (update, train, predict and test) at once by only writing update body.
 (defmacro define-learner (learner-type (learner input training-label) &body body)
@@ -124,8 +81,18 @@
 
 ;;; Perceptron
 
-(defstruct (perceptron (:constructor %make-perceptron))
+(defstruct (perceptron (:constructor %make-perceptron)
+                       (:print-object %print-perceptron))
   input-dimension weight bias)
+
+(defun %print-perceptron (obj stream)
+  (format stream "#S(PERCEPTRON~%~T:INPUT-DIMENSION ~A~%~T:WEIGHT ~A ...~%~T:BIAS ~A)"
+          (perceptron-input-dimension obj)
+          (let ((w (perceptron-weight obj)))
+            (if (> (length w) 10)
+              (subseq w 0 10)
+              w))
+          (perceptron-bias obj)))
 
 (defun make-perceptron (input-dimension)
   (check-type input-dimension integer)
@@ -148,9 +115,25 @@
 
 ;;; AROW
 
-(defstruct (arow (:constructor %make-arow))
+(defstruct (arow (:constructor  %make-arow)
+                 (:print-object %print-arow))
   input-dimension weight bias
   gamma sigma sigma0 tmp-vec1 tmp-vec2)
+
+(defun %print-arow (obj stream)
+  (format stream "#S(AROW~%~T:INPUT-DIMENSION ~A~%~T:WEIGHT ~A ...~%~T:BIAS ~A~%~T:GAMMA ~A~%~T:SIGMA ~A ...~%~T:SIGMA0 ~A)"
+          (arow-input-dimension obj)
+          (let ((w (arow-weight obj)))
+            (if (> (length w) 10)
+              (subseq w 0 10)
+              w))
+          (arow-bias obj)
+          (arow-gamma obj)
+          (let ((s (arow-sigma obj)))
+            (if (> (length s) 10)
+              (subseq s 0 10)
+              s))
+          (arow-sigma0 obj)))
 
 (defun make-arow (input-dimension gamma)
   (check-type input-dimension integer)
@@ -166,7 +149,7 @@
               :tmp-vec2 (make-dvec input-dimension 0d0)))
 
 (define-learner arow (learner input training-label)
-  (let* ((loss (- 1d0 (* training-label (f input (arow-weight learner) (arow-bias learner))))))
+  (let ((loss (- 1d0 (* training-label (f input (arow-weight learner) (arow-bias learner))))))
     (if (> loss 0d0)
       (let* ((beta (/ 1d0 (+ (arow-sigma0 learner)
 			     (inner-product
@@ -208,12 +191,32 @@
   (* (sqrt 2d0)
      (inverse-erf (- (* 2d0 p) 1d0))))
 
-(defstruct (scw (:constructor %make-scw))
+(defstruct (scw (:constructor  %make-scw)
+                (:print-object %print-scw))
   input-dimension weight bias
   eta C
   ;; Internal parameters
   phi psi zeta sigma sigma0
   tmp-vec1 tmp-vec2)
+
+(defun %print-scw (obj stream)
+  (format stream "#S(SCW~%~T:INPUT-DIMENSION ~A~%~T:WEIGHT ~A ...~%~T:BIAS ~A~%~T:ETA ~A~%~T:C ~A~%~T:PHI ~A~%~T:PSI ~A~%~T:ZETA ~A~%~T:SIGMA ~A ...~%~T:SIGMA0 ~A)"
+          (scw-input-dimension obj)
+          (let ((w (scw-weight obj)))
+            (if (> (length w) 10)
+              (subseq w 0 10)
+              w))
+          (scw-bias obj)
+          (scw-eta obj)
+          (scw-C obj)
+          (scw-phi obj)
+          (scw-psi obj)
+          (scw-zeta obj)
+          (let ((s (scw-sigma obj)))
+            (if (> (length s) 10)
+              (subseq s 0 10)
+              s))
+          (scw-sigma0 obj)))
 
 (defun make-scw (input-dimension eta C)
   (check-type input-dimension integer)
@@ -273,7 +276,267 @@
 		 (* beta (scw-sigma0 learner)
 		    (scw-sigma0 learner))))))))
 
-;;; Multiclass classifiers
+;;;; Sparse version learners ;;;;
+
+(defmacro sf (input weight bias)
+  `(+ (ds-inner-product ,weight ,input) ,bias))
+
+(defmacro define-sparse-learner (learner-type (learner input training-label) &body body)
+  `(progn
+     (defun ,(intern (catstr (symbol-name learner-type) "-UPDATE"))
+         (,learner ,input ,training-label)
+       ,@body
+       ,learner)
+
+     (defun ,(intern (catstr (symbol-name learner-type) "-TRAIN"))
+         (learner training-data)
+       (etypecase training-data
+         (list (dolist (datum training-data)
+                 (,(intern (catstr (symbol-name learner-type) "-UPDATE"))
+                   learner (cdr datum) (car datum))))
+         (vector (loop for datum across training-data do
+           (,(intern (catstr (symbol-name learner-type) "-UPDATE"))
+                     learner (cdr datum) (car datum)))))
+       learner)
+
+     (defun ,(intern (catstr (symbol-name learner-type) "-PREDICT"))
+         (learner input)
+       (sign (sf input
+                (,(intern (catstr (symbol-name learner-type) "-WEIGHT")) learner)
+                (,(intern (catstr (symbol-name learner-type) "-BIAS")) learner))))
+
+     (defun ,(intern (catstr (symbol-name learner-type) "-TEST"))
+         (learner test-data &key (quiet-p nil))
+       (let* ((len (length test-data))
+              (n-correct (count-if (lambda (datum)
+                                     (= (,(intern (catstr (symbol-name learner-type) "-PREDICT"))
+                                          learner (cdr datum)) (car datum)))
+                                   test-data))
+              (accuracy (* (/ n-correct len) 100.0)))
+         (if (not quiet-p)
+           (format t "Accuracy: ~f%, Correct: ~A, Total: ~A~%" accuracy n-correct len))
+         (values accuracy n-correct len)))))
+
+;;; Sparse Perceptron
+
+(defstruct (sparse-perceptron (:constructor %make-sparse-perceptron)
+                              (:print-object %print-sparse-perceptron))
+  input-dimension weight bias)
+
+(defun %print-sparse-perceptron (obj stream)
+  (format stream "#S(SPARSE-PERCEPTRON~%~T:INPUT-DIMENSION ~A~%~T:WEIGHT ~A ...~%~T:BIAS ~A)"
+          (sparse-perceptron-input-dimension obj)
+          (let ((w (sparse-perceptron-weight obj)))
+            (if (> (length w) 10)
+              (subseq w 0 10)
+              w))
+          (sparse-perceptron-bias obj)))
+
+(defun make-sparse-perceptron (input-dimension)
+  (check-type input-dimension integer)
+  (assert (> input-dimension 0))
+  (%make-sparse-perceptron :input-dimension input-dimension
+                           :weight (make-dvec input-dimension 0d0)
+                           :bias 0d0))
+
+(define-sparse-learner sparse-perceptron (learner input training-label)
+  (if (<= (* training-label (sf input
+                                (sparse-perceptron-weight learner)
+                                (sparse-perceptron-bias   learner))) 0d0)
+    (if (> training-label 0d0)
+      (progn
+        (dv+sv (sparse-perceptron-weight learner) input)
+        (setf (sparse-perceptron-bias learner) (+ (sparse-perceptron-bias learner) 1d0)))
+      (progn
+        (dv-sv (sparse-perceptron-weight learner) input)
+        (setf (sparse-perceptron-bias learner) (- (sparse-perceptron-bias learner) 1d0))))))
+
+;;; Sparse AROW
+
+(defstruct (sparse-arow (:constructor  %make-sparse-arow)
+                        (:print-object %print-sparse-arow))
+  input-dimension weight bias
+  gamma sigma sigma0 tmp-vec1 tmp-vec2)
+
+(defun %print-sparse-arow (obj stream)
+  (format stream "#S(SPARSE-AROW~%~T:INPUT-DIMENSION ~A~%~T:WEIGHT ~A ...~%~T:BIAS ~A~%~T:GAMMA ~A~%~T:SIGMA ~A ...~%~T:SIGMA0 ~A)"
+          (sparse-arow-input-dimension obj)
+          (let ((w (sparse-arow-weight obj)))
+            (if (> (length w) 10)
+              (subseq w 0 10)
+              w))
+          (sparse-arow-bias obj)
+          (sparse-arow-gamma obj)
+          (let ((s (sparse-arow-sigma obj)))
+            (if (> (length s) 10)
+              (subseq s 0 10)
+              s))
+          (sparse-arow-sigma0 obj)))
+
+(defun make-sparse-arow (input-dimension gamma)
+  (check-type input-dimension integer)
+  (assert (> input-dimension 0))
+  (check-type gamma double-float)
+  (%make-sparse-arow :input-dimension input-dimension
+                     :weight (make-dvec input-dimension 0d0) ; mu
+                     :bias 0d0                               ; mu0
+                     :gamma gamma
+                     :sigma (make-dvec input-dimension 1d0)
+                     :sigma0 1d0
+                     :tmp-vec1 (make-dvec input-dimension 0d0)
+                     :tmp-vec2 (make-dvec input-dimension 0d0)))
+
+(define-sparse-learner sparse-arow (learner input training-label)
+  (let ((index-vector (sparse-vector-index-vector input))
+        (loss (- 1d0 (* training-label
+                        (sf input (sparse-arow-weight learner) (sparse-arow-bias learner))))))
+    (if (> loss 0d0)
+      (let* ((beta (/ 1d0 (+ (sparse-arow-sigma0 learner)
+			     (ds-inner-product
+                              (dence-sparse-elementwise-product (sparse-arow-sigma learner)
+                                                                input
+                                                                (sparse-arow-tmp-vec1 learner))
+                              input)
+			     (sparse-arow-gamma learner))))
+	     (alpha (* loss beta)))
+	;; Update weight
+	(dence-pseudosparse-v-scale (sparse-arow-tmp-vec1 learner)
+                                    (* alpha training-label)
+                                    index-vector
+                                    (sparse-arow-tmp-vec2 learner))
+	(dence-pseudosparse-v+ (sparse-arow-weight learner)
+                               (sparse-arow-tmp-vec2 learner)
+                               index-vector
+                               (sparse-arow-weight learner))
+	;; Update bias
+	(setf (sparse-arow-bias learner) (+ (sparse-arow-bias learner)
+                                            (* alpha (sparse-arow-sigma0 learner) training-label)))
+	;; Update sigma
+	(dence-pseudosparse-elementwise-product (sparse-arow-tmp-vec1 learner)
+                                                (sparse-arow-tmp-vec1 learner)
+                                                index-vector
+                                                (sparse-arow-tmp-vec1 learner))
+	(dence-pseudosparse-v-scale (sparse-arow-tmp-vec1 learner)
+                                    beta
+                                    index-vector
+                                    (sparse-arow-tmp-vec1 learner))
+	(dence-pseudosparse-v- (sparse-arow-sigma learner)
+                               (sparse-arow-tmp-vec1 learner)
+                               index-vector
+                               (sparse-arow-sigma learner))
+	;; Update sigma0
+	(setf (sparse-arow-sigma0 learner)
+	      (- (sparse-arow-sigma0 learner)
+		 (* beta (sparse-arow-sigma0 learner)
+		    (sparse-arow-sigma0 learner))))))))
+
+;;; Sparse SCW-I
+
+(defstruct (sparse-scw (:constructor  %make-sparse-scw)
+                       (:print-object %print-sparse-scw))
+  input-dimension weight bias
+  eta C
+  ;; Internal parameters
+  phi psi zeta sigma sigma0
+  tmp-vec1 tmp-vec2)
+
+(defun %print-sparse-scw (obj stream)
+  (format stream "#S(SPARSE-SCW~%~T:INPUT-DIMENSION ~A~%~T:WEIGHT ~A ...~%~T:BIAS ~A~%~T:ETA ~A~%~T:C ~A~%~T:PHI ~A~%~T:PSI ~A~%~T:ZETA ~A~%~T:SIGMA ~A ...~%~T:SIGMA0 ~A)"
+          (sparse-scw-input-dimension obj)
+          (let ((w (sparse-scw-weight obj)))
+            (if (> (length w) 10)
+              (subseq w 0 10)
+              w))
+          (sparse-scw-bias obj)
+          (sparse-scw-eta obj)
+          (sparse-scw-C obj)
+          (sparse-scw-phi obj)
+          (sparse-scw-psi obj)
+          (sparse-scw-zeta obj)
+          (let ((s (sparse-scw-sigma obj)))
+            (if (> (length s) 10)
+              (subseq s 0 10)
+              s))
+          (sparse-scw-sigma0 obj)))
+
+(defun make-sparse-scw (input-dimension eta C)
+  (check-type input-dimension integer)
+  (assert (> input-dimension 0))
+  (check-type eta double-float)
+  (check-type C double-float)
+  (assert (< 0d0 eta 1d0))
+  (let* ((phi (coerce (probit eta) 'double-float))
+	 (psi (+ 1d0 (/ (* phi phi) 2d0)))
+	 (zeta (+ 1d0 (* phi phi))))
+    (%make-sparse-scw
+     :input-dimension input-dimension
+     :weight (make-dvec input-dimension 0d0)
+     :bias 0d0
+     :eta eta
+     :C C
+     :phi phi
+     :psi psi
+     :zeta zeta
+     :sigma (make-dvec input-dimension 1d0)
+     :sigma0 1d0
+     :tmp-vec1 (make-dvec input-dimension 0d0)
+     :tmp-vec2 (make-dvec input-dimension 0d0))))
+
+(define-sparse-learner sparse-scw (learner input training-label)
+  (let* ((index-vector (sparse-vector-index-vector input))
+         (phi (sparse-scw-phi learner))
+         (m (* training-label (sf input (sparse-scw-weight learner) (sparse-scw-bias learner))))
+         (v (+ (sparse-scw-sigma0 learner)
+               (ds-inner-product
+                (dence-sparse-elementwise-product (sparse-scw-sigma learner)
+                                                  input
+                                                  (sparse-scw-tmp-vec1 learner))
+                input)))
+         (loss (- (* phi (sqrt v)) m)))
+    (if (> loss 0d0)
+      (let* ((psi (sparse-scw-psi learner))
+             (zeta (sparse-scw-zeta learner))
+             (alpha (min (sparse-scw-C learner)
+                         (max 0d0
+                              (- (sqrt (+ (/ (* m m phi phi phi phi) 4d0)
+                                          (* v phi phi zeta)))
+                                 (* m psi)))))
+             (u (let ((base (- (sqrt (+ (* alpha alpha v v phi phi) (* 4d0 v))) (* alpha v phi))))
+                  (/ (* base base) 4d0)))
+             (beta (/ (* alpha phi)
+                      (+ (sqrt u) (* v alpha phi)))))
+        ;; Update weight
+        (dence-pseudosparse-v-scale (sparse-scw-tmp-vec1 learner)
+                                    (* alpha training-label)
+                                    index-vector
+                                    (sparse-scw-tmp-vec2 learner))
+        (dence-pseudosparse-v+ (sparse-scw-weight learner)
+                               (sparse-scw-tmp-vec2 learner)
+                               index-vector
+                               (sparse-scw-weight learner))
+        ;; Update bias
+        (setf (sparse-scw-bias learner) (+ (sparse-scw-bias learner)
+                                           (* alpha (sparse-scw-sigma0 learner) training-label)))
+        ;; Update sigma
+        (dence-pseudosparse-elementwise-product (sparse-scw-tmp-vec1 learner)
+                                                (sparse-scw-tmp-vec1 learner)
+                                                index-vector
+                                                (sparse-scw-tmp-vec1 learner))
+        (dence-pseudosparse-v-scale (sparse-scw-tmp-vec1 learner)
+                                    beta
+                                    index-vector
+                                    (sparse-scw-tmp-vec1 learner))
+        (dence-pseudosparse-v- (sparse-scw-sigma learner)
+                               (sparse-scw-tmp-vec1 learner)
+                               index-vector
+                               (sparse-scw-sigma learner))
+        ;; Update sigma0
+        (setf (sparse-scw-sigma0 learner)
+              (- (sparse-scw-sigma0 learner)
+                 (* beta (sparse-scw-sigma0 learner)
+                    (sparse-scw-sigma0 learner))))))))
+
+;;;; Multiclass classifiers ;;;;
 
 (defmacro define-multi-class-learner-train/test-functions (learner-type)
   `(progn
@@ -305,9 +568,25 @@
 (defmacro function-by-name (name-string)
   `(symbol-function (intern ,name-string :cl-online-learning)))
 
-(defstruct (one-vs-rest (:constructor %make-one-vs-rest))
+(defstruct (one-vs-rest (:constructor  %make-one-vs-rest)
+                        (:print-object %print-one-vs-rest))
   input-dimension n-class learners-vector
-  learner-weight learner-bias learner-update)
+  learner-weight learner-bias learner-update learner-activate)
+
+(defun %print-one-vs-rest (obj stream)
+  (format stream "#S(ONE-VS-REST~%~T:INPUT-DIMENSION ~A~%~T:N-CLASS ~A~%~T:LEARNERS-VECTOR #(~A ...)~%~T:N-LEARNERS: ~A)"
+          (one-vs-rest-input-dimension obj)
+          (one-vs-rest-n-class obj)
+          (if (vectorp (one-vs-rest-learners-vector obj))
+            (type-of (aref (one-vs-rest-learners-vector obj) 0)))
+          (if (vectorp (one-vs-rest-learners-vector obj))
+            (length (one-vs-rest-learners-vector obj)))))
+
+(defun sparse-symbol? (symbol)
+  (let ((name (symbol-name symbol)))
+    (and (> (length name) 7)
+         (string= (subseq (symbol-name symbol) 0 7)
+                  "SPARSE-"))))
 
 (defun make-one-vs-rest (input-dimension n-class learner-type &rest learner-params)
   (check-type input-dimension integer)
@@ -320,7 +599,12 @@
                :learners-vector (make-array n-class)
                :learner-weight (function-by-name (catstr (symbol-name learner-type) "-WEIGHT"))
                :learner-bias   (function-by-name (catstr (symbol-name learner-type) "-BIAS"))
-               :learner-update (function-by-name (catstr (symbol-name learner-type) "-UPDATE")))))
+               :learner-update (function-by-name (catstr (symbol-name learner-type) "-UPDATE"))
+               :learner-activate (if (sparse-symbol? learner-type)
+                                   (lambda (input weight bias)
+                                     (+ (ds-inner-product weight input) bias))
+                                   (lambda (input weight bias)
+                                     (+ (inner-product weight input) bias))))))
     (loop for i from 0 to (1- n-class) do
       (setf (aref (one-vs-rest-learners-vector mulc) i)
             (apply (function-by-name (catstr "MAKE-" (symbol-name learner-type)))
@@ -332,9 +616,10 @@
 	(max-i 0))
     (loop for i from 0 to (1- (one-vs-rest-n-class mulc)) do
       (let* ((learner (svref (one-vs-rest-learners-vector mulc) i))
-	     (learner-f (f input
-                           (funcall (one-vs-rest-learner-weight mulc) learner)
-                           (funcall (one-vs-rest-learner-bias mulc)   learner))))
+	     (learner-f (funcall (one-vs-rest-learner-activate mulc)
+                                 input
+                                 (funcall (one-vs-rest-learner-weight mulc) learner)
+                                 (funcall (one-vs-rest-learner-bias mulc)   learner))))
 	(if (> learner-f max-f)
 	  (setf max-f learner-f
 		max-i i))))
@@ -353,9 +638,19 @@
 
 ;;; one-vs-one
 
-(defstruct (one-vs-one (:constructor %make-one-vs-one))
+(defstruct (one-vs-one (:constructor  %make-one-vs-one)
+                       (:print-object %print-one-vs-one))
   input-dimension n-class learners-vector
   learner-update learner-predict)
+
+(defun %print-one-vs-one (obj stream)
+  (format stream "#S(ONE-VS-ONE~%~T:INPUT-DIMENSION ~A~%~T:N-CLASS ~A~%~T:LEARNERS-VECTOR #(~A ...)~%~T:N-LEARNERS: ~A)"
+          (one-vs-one-input-dimension obj)
+          (one-vs-one-n-class obj)
+          (if (vectorp (one-vs-one-learners-vector obj))
+            (type-of (aref (one-vs-one-learners-vector obj) 0)))
+          (if (vectorp (one-vs-one-learners-vector obj))
+            (length (one-vs-one-learners-vector obj)))))
 
 (defun make-one-vs-one (input-dimension n-class learner-type &rest learner-params)
   (check-type input-dimension integer)
