@@ -45,7 +45,7 @@
 (train sparse-scw-learner sparse-a1a-train)
 (sparse-scw-test sparse-scw-learner sparse-a1a-test)
 
-;;; Multiclass classification, Dence data
+;;; More bigger data
 
 (defparameter a9a-dim 123)
 
@@ -210,7 +210,7 @@
 				       :report :flat)
   (loop repeat 1000 do (arow-train arow-learner a9a-train)))
 
-;;; Multi class
+;;; Multiclass
 
 (defparameter iris-dim 4)
 
@@ -219,17 +219,15 @@
    (coerce (read-libsvm-data-multiclass "/home/wiz/tmp/iris.scale" iris-dim)
 	   'simple-vector)))
 
+(defparameter iris
+  (read-libsvm-data-multiclass "/home/wiz/tmp/iris.scale" iris-dim))
+
 (defparameter iris-train (subseq iris 0 100))
 (defparameter iris-test (subseq iris 100))
 
-;; one-vs-rest
-(defparameter mulc (make-one-vs-rest 780 10 'arow 10d0))
-(time (loop repeat 100 do (train mulc cl-ol.exam::mnist+1)))
-(test mulc cl-ol.exam::mnist.t+1)
-
-(defparameter mulc (make-one-vs-one 780 10 'arow 10d0))
-(time (loop repeat 100 do (train mulc cl-ol.exam::mnist+1)))
-(test mulc cl-ol.exam::mnist.t+1)
+(defparameter mul-percep (make-one-vs-rest 4 3 'perceptron))
+(train mul-percep iris)
+(test mul-percep iris)
 
 ;; AROW
 (defparameter mul-arow (make-one-vs-rest 4 3 'arow 0.1d0))
