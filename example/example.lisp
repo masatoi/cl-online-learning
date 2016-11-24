@@ -1,3 +1,5 @@
+;;; -*- coding:utf-8; mode:lisp -*-
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;; Examples ;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -13,8 +15,8 @@
 ;;; Binary classification, Dence data
 
 (defparameter a1a-dim 123)
-(defparameter a1a-train (read-libsvm-data "/home/wiz/tmp/a1a" a1a-dim))
-(defparameter a1a-test (read-libsvm-data "/home/wiz/tmp/a1a.t" a1a-dim))
+(defparameter a1a-train (read-libsvm-data "/home/wiz/datasets/a1a" a1a-dim))
+(defparameter a1a-test (read-libsvm-data "/home/wiz/datasets/a1a.t" a1a-dim))
 
 (defparameter perceptron-learner (make-perceptron a1a-dim))
 (train perceptron-learner a1a-train)
@@ -27,6 +29,36 @@
 (defparameter scw-learner (make-scw  a1a-dim 0.9d0 0.1d0))
 (train scw-learner a1a-train)
 (test scw-learner a1a-test)
+
+(defparameter sgd-learner (clol::make-sgd a1a-dim 0.00001d0 0.01d0))
+(train sgd-learner a1a-train)
+(test sgd-learner a1a-test)
+
+(loop for C in '(0d0 0.00001d0 0.0001d0 0.001d0 0.01d0 0.1d0 1d0) do
+  (defparameter sgd-learner (clol::make-sgd a1a-dim C 0.01d0))
+  (print (clol::sgd-C sgd-learner))
+  (loop repeat 20 do
+    (train sgd-learner a1a-train)
+    (test  sgd-learner a1a-test)))
+
+; α = 0.001, β1 = 0.9, β2 = 0.999 and ε = 10^-8
+(defparameter adam-learner (make-adam a1a-dim 0.000001d0 0.001d0 1.d-8 0.9d0 0.99d0))
+(adam-update adam-learner (cdar a1a-train) (caar a1a-train))
+
+(ql:quickload :clgplot)
+
+(clgp:plot (reverse clol::*dbg*))
+
+(loop repeat 10 do
+  (adam-train adam-learner a1a-train)
+  (adam-test adam-learner a1a-test))
+
+(loop for C in '(0d0 0.00001d0 0.0001d0 0.001d0 0.01d0 0.1d0 1d0) do
+  (defparameter adam-learner (make-adam a1a-dim C 0.001d0 1.d-8 0.9d0 0.99d0))
+  (print (clol::adam-C adam-learner))
+  (loop repeat 20 do
+    (train adam-learner a1a-train)
+    (test  adam-learner a1a-test)))
 
 ;;; Binary classification, Sparse data
 
@@ -238,23 +270,88 @@
 (train mul-arow iris-train)
 (test mul-arow iris-test)
 
-;;;;; news20 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;; MNIST ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(in-package :clol.exam)
+(defparameter mnist-dim 780)
+(defparameter mnist-train (read-libsvm-data-multiclass "/home/wiz/tmp/mnist.scale" mnist-dim))
+(defparameter mnist-test  (read-libsvm-data-multiclass "/home/wiz/tmp/mnist.scale.t" mnist-dim))
+
+;; Add 1 to labels because the labels of this dataset begin from 0
+(dolist (datum mnist-train) (incf (car datum)))
+(dolist (datum mnist-test)  (incf (car datum)))
+
+(defparameter mnist-arow (make-one-vs-one mnist-dim 10 'arow 10d0))
+(time (loop repeat 8 do (train mnist-arow mnist-train)))
+
+;; Evaluation took:
+;;   3.946 seconds of real time
+;;   3.956962 seconds of total run time (3.956962 user, 0.000000 system)
+;;   100.28% CPU
+;;   13,384,797,419 processor cycles
+;;   337,643,712 bytes consed
+
+(test mnist-arow mnist-test)
+;; Accuracy: 94.6%, Correct: 9460, Total: 10000
+
+;;; LIBLINEAR
+;; wiz@prime:~/tmp$ time liblinear-train -q mnist.scale mnist.model
+;; real    2m26.804s
+;; user    2m26.668s
+;; sys     0m0.312s
+
+;; wiz@prime:~/tmp$ liblinear-predict mnist.scale.t mnist.model mnist.out
+;; Accuracy = 91.69% (9169/10000)
+
+;;; Sparse
+
+(defparameter mnist-train.sp (read-libsvm-data-sparse-multiclass "/home/wiz/tmp/mnist.scale"))
+(defparameter mnist-test.sp  (read-libsvm-data-sparse-multiclass "/home/wiz/tmp/mnist.scale.t"))
+
+;; Add 1 to labels because the labels of this dataset begin from 0
+(dolist (datum mnist-train.sp) (incf (car datum)))
+(dolist (datum mnist-test.sp)  (incf (car datum)))
+
+(ql:quickload :clgplot)
+(clgp:plot-histogram (mapcar (lambda (d) (clol.vector::sparse-vector-length (cdr d)))
+                             mnist-train.sp) 20)
+
+(defparameter mnist-arow.sp (make-one-vs-one mnist-dim 10 'sparse-arow 10d0))
+(time (loop repeat 8 do (train mnist-arow.sp mnist-train.sp)))
+
+;; Evaluation took:
+;;   1.347 seconds of real time
+;;   1.348425 seconds of total run time (1.325365 user, 0.023060 system)
+;;   [ Run times consist of 0.012 seconds GC time, and 1.337 seconds non-GC time. ]
+;;   100.07% CPU
+;;   4,570,387,768 processor cycles
+;;   337,618,400 bytes consed
+
+;;;;; news20 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defparameter news20-dim 62060)
 (defparameter news20-train (read-libsvm-data-sparse-multiclass "/home/wiz/datasets/news20.scale"))
 (defparameter news20-test (read-libsvm-data-sparse-multiclass "/home/wiz/datasets/news20.t.scale"))
 
 (defparameter news20-arow (make-one-vs-one news20-dim 20 'sparse-arow 1d0))
+
+(time (train news20-arow news20-train))
+(time (test news20-arow news20-test))
+
 (loop repeat 10 do
   (train news20-arow news20-train)
   (test news20-arow news20-test))
 
 (defparameter news20-arow-1vr (make-one-vs-rest news20-dim 20 'sparse-arow 10d0))
+
+(time (train news20-arow-1vr news20-train))
+(time (test news20-arow-1vr news20-test))
+
 (loop repeat 10 do
   (train news20-arow-1vr news20-train)
   (test news20-arow-1vr news20-test))
+
+(time (loop repeat 10 do
+  (train news20-arow-1vr news20-train)))
 
 ;;; Almost data dimension < 500
 ;; (ql:quickload :clgplot)
@@ -265,3 +362,126 @@
 ;;  200)
 
 ;;;;; news20.binary ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defparameter news20.binary-dim 1355191)
+(defparameter news20.binary (read-libsvm-data-sparse "/home/wiz/datasets/news20.binary"))
+(defparameter news20.binary.arow (make-sparse-arow news20.binary-dim 10d0))
+(time (loop repeat 20 do (train news20.binary.arow news20.binary)))
+(test news20.binary.arow news20.binary)
+
+(ql:quickload :clgplot)
+(clgp:plot-histogram (mapcar (lambda (d) (clol.vector::sparse-vector-length (cdr d)))
+                             news20.binary) 200 :x-range '(0 3000)
+                             :output "/home/wiz/tmp/news20.binary-histogram.png")
+
+;; Evaluation took:
+;;   1.588 seconds of real time
+;;   1.588995 seconds of total run time (1.582495 user, 0.006500 system)
+;;   [ Run times consist of 0.006 seconds GC time, and 1.583 seconds non-GC time. ]
+;;   100.06% CPU
+;;   5,386,830,659 processor cycles
+;;   59,931,648 bytes consed
+  
+;; Accuracy: 99.74495%, Correct: 19945, Total: 19996
+
+;;; AROW++
+;; wiz@prime:~/datasets$ arow_learn -i 20 news20.binary news20.binary.model.arow 
+;; Number of features: 1355191
+;; Number of examples: 19996
+;; Number of updates:  37643
+;; Done!
+;; Time: 9.0135 sec.
+
+;; wiz@prime:~/datasets$ arow_test news20.binary news20.binary.model.arow 
+;; Accuracy 99.915% (19979/19996)
+;; (Answer, Predict): (t,p):9986 (t,n):9993 (f,p):4 (f,n):13
+;; Done!
+;; Time: 2.2762 sec.
+
+;;; liblinear
+;; wiz@prime:~/datasets$ time liblinear-train -q news20.binary news20.binary.model
+
+;; real    0m2.800s
+;; user    0m2.772s
+;; sys     0m0.265s
+;; wiz@prime:~/datasets$ liblinear-predict news20.binary news20.binary.model news20.binary.out
+;; Accuracy = 99.875% (19971/19996)
+
+;;;;; cod-rna ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Dence data
+
+;; of classes: 2
+;; of data: 59,535 / 271617 (validation) / 157413 (unused/remaining)
+;; of features: 8
+
+(defparameter cod-rna-dim 8)
+(defparameter cod-rna (read-libsvm-data "/home/wiz/datasets/cod-rna" cod-rna-dim))
+(defparameter cod-rna.t (read-libsvm-data "/home/wiz/datasets/cod-rna.t" cod-rna-dim))
+
+;; it seem require scaling
+
+(defparameter cod-rna.scale (read-libsvm-data "/home/wiz/datasets/cod-rna.scale" cod-rna-dim))
+(defparameter cod-rna.t.scale (read-libsvm-data "/home/wiz/datasets/cod-rna.t.scale" cod-rna-dim))
+
+(defparameter cod-rna-arow (make-arow cod-rna-dim 10d0))
+(time (loop repeat 20 do (train cod-rna-arow cod-rna)))
+(test cod-rna-arow cod-rna.t)
+
+(defparameter cod-rna-arow (make-arow cod-rna-dim 0.1d0))
+(loop repeat 20 do
+  (train cod-rna-arow cod-rna)
+  (test cod-rna-arow cod-rna.t))
+
+(defparameter cod-rna-sgd (make-sgd cod-rna-dim 0.000000001d0 0.001d0))
+(loop repeat 20 do
+  (train cod-rna-sgd cod-rna)
+  (test cod-rna-sgd cod-rna.t))
+
+(defparameter cod-rna-adam (make-adam cod-rna-dim 0.00000000000000000001d0 0.001d0 1.d-8 0.9d0 0.99d0))
+(loop repeat 20 do
+  (train cod-rna-adam cod-rna)
+  (test cod-rna-adam cod-rna.t))
+
+(defparameter cod-rna-scw (make-scw cod-rna-dim 0.9d0 0.1d0))
+(loop repeat 20 do
+  (train cod-rna-scw cod-rna)
+  (test cod-rna-scw cod-rna.t))
+
+;; Evaluation took:
+;;   0.989 seconds of real time
+;;   0.991686 seconds of total run time (0.987975 user, 0.003711 system)
+;;   [ Run times consist of 0.038 seconds GC time, and 0.954 seconds non-GC time. ]
+;;   100.30% CPU
+;;   3,356,870,825 processor cycles
+;;   1,508,573,152 bytes consed
+  
+;; Accuracy: 79.89706%, Correct: 217014, Total: 271617
+
+;; wiz@prime:~/datasets$ arow_learn -i 100 cod-rna cod-rna.model.arow
+;; Number of features: 8
+;; Number of examples: 59535
+;; Number of updates:  5903680
+;; Done!
+;; Time: 9.0629 sec.
+
+;; wiz@prime:~/datasets$ arow_test cod-rna.t cod-rna.model.arow
+;; Accuracy 75.503% (205079/271617)
+;; (Answer, Predict): (t,p):24835 (t,n):180244 (f,p):834 (f,n):65704
+;; Done!
+;; Time: 0.6416 sec.
+
+(defparameter cod-rna.sp (read-libsvm-data-sparse "/home/wiz/datasets/cod-rna"))
+(defparameter cod-rna.t.sp (read-libsvm-data-sparse "/home/wiz/datasets/cod-rna.t"))
+
+;; it seem require scaling => use libsvm scaling
+
+(defparameter cod-rna-arow.sp (make-sparse-arow cod-rna-dim 10d0))
+(time (loop repeat 100 do (train cod-rna-arow.sp cod-rna.sp)))
+
+;; Evaluation took:
+;;   1.170 seconds of real time
+;;   1.172760 seconds of total run time (1.172760 user, 0.000000 system)
+;;   [ Run times consist of 0.040 seconds GC time, and 1.133 seconds non-GC time. ]
+;;   100.26% CPU
+;;   3,968,874,560 processor cycles
+;;   1,508,573,184 bytes consed

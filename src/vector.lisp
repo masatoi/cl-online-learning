@@ -5,12 +5,12 @@
   (:use :cl)
   (:nicknames :clol.vector)
   (:export
-   :make-dvec :v+ :v- :v-scale :elementwise-product :inner-product
+   :make-dvec :v+ :v- :v*n :v+n :v* :v/ :v-sqrt
+   :dot
    :sparse-vector-length :sparse-vector-index-vector :sparse-vector-value-vector
    :make-sparse-vector :make-empty-sparse-vector
-   :dv+sv :dv-sv :ds-inner-product
-   :dence-pseudosparse-v+ :dence-pseudosparse-v- :dence-pseudosparse-v-scale
-   :dence-sparse-elementwise-product :dence-pseudosparse-elementwise-product))
+   :ds-v+ :ds-v- :ds-v* :ds-v/ :ds-dot
+   :dps-v+ :dps-v- :dps-v*n :dps-v*))
 
 (in-package :cl-online-learning.vector)
 
@@ -33,7 +33,7 @@
     (setf (aref result i) (- (aref x i) (aref y i))))
   result)
 
-(defun v-scale (vec n result)
+(defun v*n (vec n result)
   (declare (type double-float n)
 	   (type (simple-array double-float) vec result)
            (optimize (speed 3) (safety 0)))
@@ -41,17 +41,39 @@
     (setf (aref result i) (* n (aref vec i))))
   result)
 
-(defun elementwise-product (x y result)
+(defun v+n (x n result)
+  (declare (type double-float n)
+           (type (simple-array double-float) x result)
+           (optimize (speed 3) (safety 0)))
+  (loop for i from 0 to (1- (length x)) do
+    (setf (aref result i) (+ (aref x i) n)))
+  result)
+
+(defun v* (x y result)
   (declare (type (simple-array double-float) x y result)
            (optimize (speed 3) (safety 0)))
   (loop for i from 0 to (1- (length x)) do
     (setf (aref result i) (* (aref x i) (aref y i))))
   result)
 
+(defun v/ (x y result)
+  (declare (type (simple-array double-float) x y result)
+           (optimize (speed 3) (safety 0)))
+  (loop for i from 0 to (1- (length x)) do
+    (setf (aref result i) (/ (aref x i) (aref y i))))
+  result)
+
+(defun v-sqrt (x result)
+  (declare (type (simple-array double-float) x result)
+           (optimize (speed 3) (safety 0)))
+  (loop for i from 0 to (1- (length x)) do
+    (setf (aref result i) (sqrt (aref x i))))
+  result)
+
 (declaim (ftype (function ((simple-array double-float) (simple-array double-float))
                           double-float)
-                inner-product))
-(defun inner-product (x y)
+                dot))
+(defun dot (x y)
   (declare (type (simple-array double-float) x y)
            (optimize (speed 3) (safety 0)))
   (let ((result 0.0d0))
@@ -72,37 +94,61 @@
   (%make-sparse-vector :length (length index-vector)
                        :index-vector index-vector
                        :value-vector value-vector))
-  
+
 (defun make-empty-sparse-vector (sparse-dim)
   (%make-sparse-vector :length sparse-dim
                        :index-vector (make-array sparse-dim :element-type 'fixnum)
                        :value-vector (make-array sparse-dim :element-type 'double-float)))
 
-;; dence-x = dence-x + sparse-y
-(defun dv+sv (dence-x sparse-y)
+(defun ds-v+ (dence-x sparse-y result)
   (declare (type sparse-vector sparse-y)
-           (type (simple-array double-float) dence-x)
+           (type (simple-array double-float) dence-x result)
            (optimize (speed 3) (safety 0)))
   (loop for i from 0 to (1- (sparse-vector-length sparse-y)) do
     (let ((dence-index (aref (sparse-vector-index-vector sparse-y) i)))
       (declare (type fixnum dence-index))
-      (setf (aref dence-x dence-index)
+      (setf (aref result dence-index)
             (+ (aref dence-x dence-index)
-               (aref (sparse-vector-value-vector sparse-y) i))))))
+               (aref (sparse-vector-value-vector sparse-y) i)))))
+  result)
 
-;; dence-x = dence-x - sparse-y
-(defun dv-sv (dence-x sparse-y)
+(defun ds-v- (dence-x sparse-y result)
   (declare (type sparse-vector sparse-y)
-           (type (simple-array double-float) dence-x)
+           (type (simple-array double-float) dence-x result)
            (optimize (speed 3) (safety 0)))
   (loop for i from 0 to (1- (sparse-vector-length sparse-y)) do
     (let ((dence-index (aref (sparse-vector-index-vector sparse-y) i)))
       (declare (type fixnum dence-index))
-      (setf (aref dence-x dence-index)
+      (setf (aref result dence-index)
             (- (aref dence-x dence-index)
-               (aref (sparse-vector-value-vector sparse-y) i))))))
+               (aref (sparse-vector-value-vector sparse-y) i)))))
+  result)
 
-(defun ds-inner-product (dence-x sparse-y)
+(defun ds-v* (dence-x sparse-y result)
+  (declare (type (simple-array double-float) dence-x result)
+           (type sparse-vector sparse-y)
+           (optimize (speed 3) (safety 0)))
+  (loop for i from 0 to (1- (sparse-vector-length sparse-y)) do
+    (let ((dence-index (aref (sparse-vector-index-vector sparse-y) i)))
+      (declare (type fixnum dence-index))
+      (setf (aref result dence-index)
+            (* (aref dence-x dence-index)
+               (aref (sparse-vector-value-vector sparse-y) i)))))
+  result)
+
+(defun ds-v/ (dence-x sparse-y result)
+  (declare (type (simple-array double-float) dence-x result)
+           (type sparse-vector sparse-y)
+           (optimize (speed 3) (safety 0)))
+  (loop for i from 0 to (1- (sparse-vector-length sparse-y)) do
+    (let ((dence-index (aref (sparse-vector-index-vector sparse-y) i)))
+      (declare (type fixnum dence-index))
+      (setf (aref result dence-index)
+            (/ (aref dence-x dence-index)
+               (aref (sparse-vector-value-vector sparse-y) i)))))
+  result)
+
+(defun ds-dot (dence-x sparse-y)
   (declare (type sparse-vector sparse-y)
            (type (simple-array double-float) dence-x)
            (optimize (speed 3) (safety 0)))
@@ -116,7 +162,8 @@
                  (aref (sparse-vector-value-vector sparse-y) i)))))
     result))
 
-(defun dence-pseudosparse-v+ (dence-x pseudosparse-y index-vector result)
+;;; Use dence vector with index-vector of sparse-vector as sparse-vector (pseudosparse-vector)
+(defun dps-v+ (dence-x pseudosparse-y index-vector result)
   (declare (type (simple-array double-float) dence-x pseudosparse-y result)
            (type (simple-array fixnum) index-vector)
            (optimize (speed 3) (safety 0)))
@@ -128,7 +175,7 @@
                (aref pseudosparse-y dence-index)))))
   result)
 
-(defun dence-pseudosparse-v- (dence-x pseudosparse-y index-vector result)
+(defun dps-v- (dence-x pseudosparse-y index-vector result)
   (declare (type (simple-array double-float) dence-x pseudosparse-y result)
            (type (simple-array fixnum) index-vector)
            (optimize (speed 3) (safety 0)))
@@ -140,32 +187,19 @@
                (aref pseudosparse-y dence-index)))))
   result)
 
-(defun dence-pseudosparse-v-scale (pseudosparse-x alpha index-vector result)
+(defun dps-v*n (pseudosparse-x n index-vector result)
   (declare (type (simple-array double-float) pseudosparse-x result)
            (type (simple-array fixnum) index-vector)
-           (type double-float alpha)
+           (type double-float n)
            (optimize (speed 3) (safety 0)))
   (loop for i from 0 to (1- (length index-vector)) do
     (let ((dence-index (aref index-vector i)))
       (declare (type fixnum dence-index))
       (setf (aref result dence-index)
-            (* alpha
-               (aref pseudosparse-x dence-index)))))
+            (* n (aref pseudosparse-x dence-index)))))
   result)
 
-(defun dence-sparse-elementwise-product (dence-x sparse-y result)
-  (declare (type (simple-array double-float) dence-x result)
-           (type sparse-vector sparse-y)
-           (optimize (speed 3) (safety 0)))
-  (loop for i from 0 to (1- (sparse-vector-length sparse-y)) do
-    (let ((dence-index (aref (sparse-vector-index-vector sparse-y) i)))
-      (declare (type fixnum dence-index))
-      (setf (aref result dence-index)
-            (* (aref dence-x dence-index)
-               (aref (sparse-vector-value-vector sparse-y) i)))))
-  result)
-
-(defun dence-pseudosparse-elementwise-product (dence-x pseudosparse-y index-vector result)
+(defun dps-v* (dence-x pseudosparse-y index-vector result)
   (declare (type (simple-array double-float) dence-x pseudosparse-y result)
            (type (simple-array fixnum) index-vector)
            (optimize (speed 3) (safety 0)))
