@@ -9,8 +9,9 @@
    :dot
    :sparse-vector-length :sparse-vector-index-vector :sparse-vector-value-vector
    :make-sparse-vector :make-empty-sparse-vector
+   :s-v*n :sps-v*n
    :ds-v+ :ds-v- :ds-v* :ds-v/ :ds-dot
-   :dps-v+ :dps-v- :dps-v*n :dps-v*))
+   :dps-v+ :dps-v- :ps-v*n :dps-v*))
 
 (in-package :cl-online-learning.vector)
 
@@ -100,6 +101,30 @@
                        :index-vector (make-array sparse-dim :element-type 'fixnum)
                        :value-vector (make-array sparse-dim :element-type 'double-float)))
 
+(ql:quickload :wiz-util)
+
+(defun s-v*n (sparse-x n result)
+  (declare (type sparse-vector sparse-x result)
+           (type double-float n)
+           (optimize (speed 3) (safety 0)))
+  (loop for i from 0 to (1- (sparse-vector-length sparse-x)) do
+    (setf (aref (sparse-vector-value-vector result) i)
+          (* (aref (sparse-vector-value-vector sparse-x) i) n)))
+  result)
+
+;; in case of result is pseudosparse-vector
+(defun sps-v*n (sparse-x n result)
+  (declare (type sparse-vector sparse-x)
+           (type (simple-array double-float) result)
+           (type double-float n)
+           (optimize (speed 3) (safety 0)))
+  (loop for i from 0 to (1- (sparse-vector-length sparse-x)) do
+    (let ((dence-index (aref (sparse-vector-index-vector sparse-x) i)))
+      (declare (type fixnum dence-index))
+      (setf (aref result dence-index)
+            (* (aref (sparse-vector-value-vector sparse-x) i) n))))
+  result)
+
 (defun ds-v+ (dence-x sparse-y result)
   (declare (type sparse-vector sparse-y)
            (type (simple-array double-float) dence-x result)
@@ -187,18 +212,6 @@
                (aref pseudosparse-y dence-index)))))
   result)
 
-(defun dps-v*n (pseudosparse-x n index-vector result)
-  (declare (type (simple-array double-float) pseudosparse-x result)
-           (type (simple-array fixnum) index-vector)
-           (type double-float n)
-           (optimize (speed 3) (safety 0)))
-  (loop for i from 0 to (1- (length index-vector)) do
-    (let ((dence-index (aref index-vector i)))
-      (declare (type fixnum dence-index))
-      (setf (aref result dence-index)
-            (* n (aref pseudosparse-x dence-index)))))
-  result)
-
 (defun dps-v* (dence-x pseudosparse-y index-vector result)
   (declare (type (simple-array double-float) dence-x pseudosparse-y result)
            (type (simple-array fixnum) index-vector)
@@ -209,4 +222,15 @@
       (setf (aref result dence-index)
             (* (aref dence-x dence-index)
                (aref pseudosparse-y dence-index)))))
+  result)
+(defun ps-v*n (pseudosparse-x n index-vector result)
+  (declare (type (simple-array double-float) pseudosparse-x result)
+           (type (simple-array fixnum) index-vector)
+           (type double-float n)
+           (optimize (speed 3) (safety 0)))
+  (loop for i from 0 to (1- (length index-vector)) do
+    (let ((dence-index (aref index-vector i)))
+      (declare (type fixnum dence-index))
+      (setf (aref result dence-index)
+            (* n (aref pseudosparse-x dence-index)))))
   result)

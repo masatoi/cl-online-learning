@@ -17,6 +17,7 @@
    :sparse-perceptron-predict :sparse-perceptron-test
    :make-sparse-arow :sparse-arow-update :sparse-arow-train :sparse-arow-predict :sparse-arow-test
    :make-sparse-scw :sparse-scw-update :sparse-scw-train :sparse-scw-predict :sparse-scw-test
+   :make-sparse-sgd :sparse-sgd-update :sparse-sgd-train :sparse-sgd-predict :sparse-sgd-test
    :make-one-vs-rest :one-vs-rest-update :one-vs-rest-train :one-vs-rest-predict :one-vs-rest-test
    :make-one-vs-one :one-vs-one-update :one-vs-one-train :one-vs-one-predict :one-vs-one-test))
 
@@ -277,7 +278,8 @@
 ;;; Logistic regression (L2 regularization)
 
 (defun sigmoid (x)
-  (declare (type double-float x))
+  (declare (type double-float x)
+           (optimize (speed 3) (safety 0)))
   (/ 1d0 (+ 1d0 (exp (- x)))))
 
 ;; (defun logistic-regression-gradient (training-label input-vector weight-vector C tmp-vec result)
@@ -297,6 +299,9 @@
 ;;      (* 2d0 C bias)))
 
 (defun logistic-regression-gradient (training-label input-vector weight-vector bias C tmp-vec result)
+  (declare (type double-float training-label bias C)
+           (type (simple-array double-float) input-vector weight-vector tmp-vec result)
+           (optimize (speed 3) (safety 0)))
   (let ((sigmoid-val (sigmoid (* training-label (f input-vector weight-vector bias)))))
     (v*n input-vector
          (* (- 1d0 sigmoid-val) (- training-label))
@@ -555,10 +560,10 @@
 			     (sparse-arow-gamma learner))))
 	     (alpha (* loss beta)))
 	;; Update weight
-	(dps-v*n (sparse-arow-tmp-vec1 learner)
-                 (* alpha training-label)
-                 index-vector
-                 (sparse-arow-tmp-vec2 learner))
+	(ps-v*n (sparse-arow-tmp-vec1 learner)
+                (* alpha training-label)
+                index-vector
+                (sparse-arow-tmp-vec2 learner))
 	(dps-v+ (sparse-arow-weight learner)
                 (sparse-arow-tmp-vec2 learner)
                 index-vector
@@ -571,10 +576,10 @@
                 (sparse-arow-tmp-vec1 learner)
                 index-vector
                 (sparse-arow-tmp-vec1 learner))
-	(dps-v*n (sparse-arow-tmp-vec1 learner)
-                 beta
-                 index-vector
-                 (sparse-arow-tmp-vec1 learner))
+	(ps-v*n (sparse-arow-tmp-vec1 learner)
+                beta
+                index-vector
+                (sparse-arow-tmp-vec1 learner))
 	(dps-v- (sparse-arow-sigma learner)
                 (sparse-arow-tmp-vec1 learner)
                 index-vector
@@ -660,10 +665,10 @@
              (beta (/ (* alpha phi)
                       (+ (sqrt u) (* v alpha phi)))))
         ;; Update weight
-        (dps-v*n (sparse-scw-tmp-vec1 learner)
-                 (* alpha training-label)
-                 index-vector
-                 (sparse-scw-tmp-vec2 learner))
+        (ps-v*n (sparse-scw-tmp-vec1 learner)
+                (* alpha training-label)
+                index-vector
+                (sparse-scw-tmp-vec2 learner))
         (dps-v+ (sparse-scw-weight learner)
                 (sparse-scw-tmp-vec2 learner)
                 index-vector
@@ -676,10 +681,10 @@
                 (sparse-scw-tmp-vec1 learner)
                 index-vector
                 (sparse-scw-tmp-vec1 learner))
-        (dps-v*n (sparse-scw-tmp-vec1 learner)
-                 beta
-                 index-vector
-                 (sparse-scw-tmp-vec1 learner))
+        (ps-v*n (sparse-scw-tmp-vec1 learner)
+                beta
+                index-vector
+                (sparse-scw-tmp-vec1 learner))
         (dps-v- (sparse-scw-sigma learner)
                 (sparse-scw-tmp-vec1 learner)
                 index-vector
@@ -689,6 +694,55 @@
               (- (sparse-scw-sigma0 learner)
                  (* beta (sparse-scw-sigma0 learner)
                     (sparse-scw-sigma0 learner))))))))
+
+
+;;; Logistic regression model (Sparse)
+
+;; tmp-vec is pseudosparse-vector,
+
+(defun logistic-regression-gradient-sparse
+    (training-label input-vector weight-vector bias C tmp-vec result)
+  (declare (type double-float training-label bias C)
+           (type (simple-array double-float) weight-vector tmp-vec result)
+           (optimize (speed 3) (safety 0)))
+  (let ((sigmoid-val (sigmoid (* training-label (sf input-vector weight-vector bias)))))
+    (sps-v*n input-vector
+             (* (- 1d0 sigmoid-val) (- training-label))
+             tmp-vec)
+    (v*n weight-vector (* 2d0 C) result)
+    (v+ tmp-vec result result)
+    ;; return g0
+    (+ (* (- 1d0 sigmoid-val)
+          (- training-label))
+       (* 2d0 C bias))))
+
+;;; Sparse lr+sgd
+(defstruct (sparse-sgd (:constructor %make-sparse-sgd))
+  input-dimension weight bias
+  ;; meta parameters
+  C eta g tmp-vec)
+
+(defun make-sparse-sgd (input-dimension C eta)
+  (%make-sparse-sgd
+   :input-dimension input-dimension
+   :weight (make-dvec input-dimension 0d0)
+   :bias 0d0
+   :C C
+   :eta eta
+   :g (make-dvec input-dimension 0d0)
+   :tmp-vec (make-dvec input-dimension 0d0)))
+
+(define-learner sparse-sgd (learner input training-label)
+  ;; calc g (gradient)
+  (let ((g0 (logistic-regression-gradient-sparse
+             training-label input
+             (sparse-sgd-weight learner) (sparse-sgd-bias learner)
+             (sparse-sgd-C learner) (sparse-sgd-tmp-vec learner) (sparse-sgd-g learner))))
+    (v*n (sparse-sgd-g learner) (sparse-sgd-eta learner) (sparse-sgd-g learner))
+    (v- (sparse-sgd-weight learner) (sparse-sgd-g learner) (sparse-sgd-weight learner))
+
+    (setf (sparse-sgd-bias learner)
+          (- (sparse-sgd-bias learner) (* (sparse-sgd-eta learner) g0)))))
 
 ;;;; Multiclass classifiers ;;;;
 
