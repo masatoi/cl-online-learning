@@ -24,16 +24,28 @@
 (in-package :cl-online-learning)
 
 ;;; Utils
+
 (defmacro catstr (str1 str2)
   `(concatenate 'string ,str1 ,str2))
 
-;;; Signum
+;; Signum
 (defmacro sign (x)
   `(if (> ,x 0d0) 1d0 -1d0))
 
-;;; Decision boundary
+;; Decision boundary
 (defmacro f (input weight bias)
   `(+ (dot ,weight ,input) ,bias))
+
+;; Decision boundary (For sparse input)
+(defmacro sf (input weight bias)
+  `(+ (ds-dot ,weight ,input) ,bias))
+
+(eval-when (:compile-toplevel)
+  (defun sparse-symbol? (symbol)
+    (let ((name (symbol-name symbol)))
+      (and (> (length name) 7)
+           (string= (subseq (symbol-name symbol) 0 7)
+                    "SPARSE-")))))
 
 ;;; Define learner functions (update, train, predict and test) at once by only writing update body.
 (defmacro define-learner (learner-type (learner input training-label) &body body)
@@ -56,9 +68,10 @@
 
      (defun ,(intern (catstr (symbol-name learner-type) "-PREDICT"))
          (learner input)
-       (sign (f input
-                (,(intern (catstr (symbol-name learner-type) "-WEIGHT")) learner)
-                (,(intern (catstr (symbol-name learner-type) "-BIAS")) learner))))
+       (sign (,(if (sparse-symbol? learner-type) 'sf 'f)
+              input
+              (,(intern (catstr (symbol-name learner-type) "-WEIGHT")) learner)
+              (,(intern (catstr (symbol-name learner-type) "-BIAS")) learner))))
 
      (defun ,(intern (catstr (symbol-name learner-type) "-TEST"))
          (learner test-data &key (quiet-p nil))
@@ -230,13 +243,9 @@
     (%make-scw
      :input-dimension input-dimension
      :weight (make-dvec input-dimension 0d0)
-     :bias 0d0
-     :eta eta
-     :C C
-     :phi phi
-     :psi psi
-     :zeta zeta
-     :sigma (make-dvec input-dimension 1d0)
+     :bias 0d0  :eta eta  :C C
+     :phi phi   :psi psi  :zeta zeta
+     :sigma    (make-dvec input-dimension 1d0)
      :sigma0 1d0
      :tmp-vec1 (make-dvec input-dimension 0d0)
      :tmp-vec2 (make-dvec input-dimension 0d0))))
@@ -303,6 +312,7 @@
            (type (simple-array double-float) input-vector weight-vector tmp-vec result)
            (optimize (speed 3) (safety 0)))
   (let ((sigmoid-val (sigmoid (* training-label (f input-vector weight-vector bias)))))
+    ;; set gradient-vector to result
     (v*n input-vector
          (* (- 1d0 sigmoid-val) (- training-label))
          tmp-vec)
@@ -439,45 +449,6 @@
 
 ;;;; Sparse version learners ;;;;
 
-(defmacro sf (input weight bias)
-  `(+ (ds-dot ,weight ,input) ,bias))
-
-(defmacro define-sparse-learner (learner-type (learner input training-label) &body body)
-  `(progn
-     (defun ,(intern (catstr (symbol-name learner-type) "-UPDATE"))
-         (,learner ,input ,training-label)
-       ,@body
-       ,learner)
-
-     (defun ,(intern (catstr (symbol-name learner-type) "-TRAIN"))
-         (learner training-data)
-       (etypecase training-data
-         (list (dolist (datum training-data)
-                 (,(intern (catstr (symbol-name learner-type) "-UPDATE"))
-                   learner (cdr datum) (car datum))))
-         (vector (loop for datum across training-data do
-           (,(intern (catstr (symbol-name learner-type) "-UPDATE"))
-                     learner (cdr datum) (car datum)))))
-       learner)
-
-     (defun ,(intern (catstr (symbol-name learner-type) "-PREDICT"))
-         (learner input)
-       (sign (sf input
-                 (,(intern (catstr (symbol-name learner-type) "-WEIGHT")) learner)
-                 (,(intern (catstr (symbol-name learner-type) "-BIAS")) learner))))
-
-     (defun ,(intern (catstr (symbol-name learner-type) "-TEST"))
-         (learner test-data &key (quiet-p nil))
-       (let* ((len (length test-data))
-              (n-correct (count-if (lambda (datum)
-                                     (= (,(intern (catstr (symbol-name learner-type) "-PREDICT"))
-                                          learner (cdr datum)) (car datum)))
-                                   test-data))
-              (accuracy (* (/ n-correct len) 100.0)))
-         (if (not quiet-p)
-           (format t "Accuracy: ~f%, Correct: ~A, Total: ~A~%" accuracy n-correct len))
-         (values accuracy n-correct len)))))
-
 ;;; Sparse Perceptron
 
 (defstruct (sparse-perceptron (:constructor %make-sparse-perceptron)
@@ -500,7 +471,7 @@
                            :weight (make-dvec input-dimension 0d0)
                            :bias 0d0))
 
-(define-sparse-learner sparse-perceptron (learner input training-label)
+(define-learner sparse-perceptron (learner input training-label)
   (if (<= (* training-label (sf input
                                 (sparse-perceptron-weight learner)
                                 (sparse-perceptron-bias   learner))) 0d0)
@@ -547,7 +518,7 @@
                      :tmp-vec1 (make-dvec input-dimension 0d0)
                      :tmp-vec2 (make-dvec input-dimension 0d0)))
 
-(define-sparse-learner sparse-arow (learner input training-label)
+(define-learner sparse-arow (learner input training-label)
   (let ((index-vector (sparse-vector-index-vector input))
         (loss (- 1d0 (* training-label
                         (sf input (sparse-arow-weight learner) (sparse-arow-bias learner))))))
@@ -642,7 +613,7 @@
      :tmp-vec1 (make-dvec input-dimension 0d0)
      :tmp-vec2 (make-dvec input-dimension 0d0))))
 
-(define-sparse-learner sparse-scw (learner input training-label)
+(define-learner sparse-scw (learner input training-label)
   (let* ((index-vector (sparse-vector-index-vector input))
          (phi (sparse-scw-phi learner))
          (m (* training-label (sf input (sparse-scw-weight learner) (sparse-scw-bias learner))))
@@ -789,12 +760,6 @@
             (type-of (aref (one-vs-rest-learners-vector obj) 0)))
           (if (vectorp (one-vs-rest-learners-vector obj))
             (length (one-vs-rest-learners-vector obj)))))
-
-(defun sparse-symbol? (symbol)
-  (let ((name (symbol-name symbol)))
-    (and (> (length name) 7)
-         (string= (subseq (symbol-name symbol) 0 7)
-                  "SPARSE-"))))
 
 (defun make-one-vs-rest (input-dimension n-class learner-type &rest learner-params)
   (check-type input-dimension integer)
