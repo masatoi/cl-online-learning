@@ -23,14 +23,14 @@
 (defun v+ (x y result)
   (declare (type (simple-array double-float) x y result)
            (optimize (speed 3) (safety 0)))
-  (loop for i from 0 to (1- (length x)) do
+  (loop for i fixnum from 0 to (1- (length x)) do
     (setf (aref result i) (+ (aref x i) (aref y i))))
   result)
 
 (defun v- (x y result)
   (declare (type (simple-array double-float) x y result)
            (optimize (speed 3) (safety 0)))
-  (loop for i from 0 to (1- (length x)) do
+  (loop for i fixnum from 0 to (1- (length x)) do
     (setf (aref result i) (- (aref x i) (aref y i))))
   result)
 
@@ -38,7 +38,7 @@
   (declare (type double-float n)
 	   (type (simple-array double-float) vec result)
            (optimize (speed 3) (safety 0)))
-  (loop for i from 0 to (1- (length vec)) do
+  (loop for i fixnum from 0 to (1- (length vec)) do
     (setf (aref result i) (* n (aref vec i))))
   result)
 
@@ -46,28 +46,28 @@
   (declare (type double-float n)
            (type (simple-array double-float) x result)
            (optimize (speed 3) (safety 0)))
-  (loop for i from 0 to (1- (length x)) do
+  (loop for i fixnum from 0 to (1- (length x)) do
     (setf (aref result i) (+ (aref x i) n)))
   result)
 
 (defun v* (x y result)
   (declare (type (simple-array double-float) x y result)
            (optimize (speed 3) (safety 0)))
-  (loop for i from 0 to (1- (length x)) do
+  (loop for i fixnum from 0 to (1- (length x)) do
     (setf (aref result i) (* (aref x i) (aref y i))))
   result)
 
 (defun v/ (x y result)
   (declare (type (simple-array double-float) x y result)
            (optimize (speed 3) (safety 0)))
-  (loop for i from 0 to (1- (length x)) do
+  (loop for i fixnum from 0 to (1- (length x)) do
     (setf (aref result i) (/ (aref x i) (aref y i))))
   result)
 
 (defun v-sqrt (x result)
   (declare (type (simple-array double-float) x result)
            (optimize (speed 3) (safety 0)))
-  (loop for i from 0 to (1- (length x)) do
+  (loop for i fixnum from 0 to (1- (length x)) do
     (setf (aref result i) (sqrt (aref x i))))
   result)
 
@@ -79,7 +79,7 @@
            (optimize (speed 3) (safety 0)))
   (let ((result 0.0d0))
     (declare (type double-float result))
-    (loop for i from 0 to (1- (length x)) do
+    (loop for i fixnum from 0 to (1- (length x)) do
       (incf result (* (aref x i) (aref y i))))
     result))
 
@@ -107,7 +107,7 @@
   (declare (type sparse-vector sparse-x result)
            (type double-float n)
            (optimize (speed 3) (safety 0)))
-  (loop for i from 0 to (1- (sparse-vector-length sparse-x)) do
+  (loop for i fixnum from 0 to (1- (sparse-vector-length sparse-x)) do
     (setf (aref (sparse-vector-value-vector result) i)
           (* (aref (sparse-vector-value-vector sparse-x) i) n)))
   result)
@@ -118,7 +118,7 @@
            (type (simple-array double-float) result)
            (type double-float n)
            (optimize (speed 3) (safety 0)))
-  (loop for i from 0 to (1- (sparse-vector-length sparse-x)) do
+  (loop for i fixnum from 0 to (1- (sparse-vector-length sparse-x)) do
     (let ((dence-index (aref (sparse-vector-index-vector sparse-x) i)))
       (declare (type fixnum dence-index))
       (setf (aref result dence-index)
@@ -129,7 +129,7 @@
   (declare (type sparse-vector sparse-y)
            (type (simple-array double-float) dence-x result)
            (optimize (speed 3) (safety 0)))
-  (loop for i from 0 to (1- (sparse-vector-length sparse-y)) do
+  (loop for i fixnum from 0 to (1- (sparse-vector-length sparse-y)) do
     (let ((dence-index (aref (sparse-vector-index-vector sparse-y) i)))
       (declare (type fixnum dence-index))
       (setf (aref result dence-index)
@@ -141,7 +141,7 @@
   (declare (type sparse-vector sparse-y)
            (type (simple-array double-float) dence-x result)
            (optimize (speed 3) (safety 0)))
-  (loop for i from 0 to (1- (sparse-vector-length sparse-y)) do
+  (loop for i fixnum from 0 to (1- (sparse-vector-length sparse-y)) do
     (let ((dence-index (aref (sparse-vector-index-vector sparse-y) i)))
       (declare (type fixnum dence-index))
       (setf (aref result dence-index)
@@ -153,7 +153,7 @@
   (declare (type (simple-array double-float) dence-x result)
            (type sparse-vector sparse-y)
            (optimize (speed 3) (safety 0)))
-  (loop for i from 0 to (1- (sparse-vector-length sparse-y)) do
+  (loop for i fixnum from 0 to (1- (sparse-vector-length sparse-y)) do
     (let ((dence-index (aref (sparse-vector-index-vector sparse-y) i)))
       (declare (type fixnum dence-index))
       (setf (aref result dence-index)
@@ -165,7 +165,7 @@
   (declare (type (simple-array double-float) dence-x result)
            (type sparse-vector sparse-y)
            (optimize (speed 3) (safety 0)))
-  (loop for i from 0 to (1- (sparse-vector-length sparse-y)) do
+  (loop for i fixnum from 0 to (1- (sparse-vector-length sparse-y)) do
     (let ((dence-index (aref (sparse-vector-index-vector sparse-y) i)))
       (declare (type fixnum dence-index))
       (setf (aref result dence-index)
@@ -179,7 +179,7 @@
            (optimize (speed 3) (safety 0)))
   (let ((result 0.0d0))
     (declare (type double-float result))
-    (loop for i from 0 to (1- (sparse-vector-length sparse-y)) do
+    (loop for i fixnum from 0 to (1- (sparse-vector-length sparse-y)) do
       (let ((dence-index (aref (sparse-vector-index-vector sparse-y) i)))
         (declare (type fixnum dence-index))
         (incf result
@@ -192,7 +192,7 @@
   (declare (type (simple-array double-float) dence-x pseudosparse-y result)
            (type (simple-array fixnum) index-vector)
            (optimize (speed 3) (safety 0)))
-  (loop for i from 0 to (1- (length index-vector)) do
+  (loop for i fixnum from 0 to (1- (length index-vector)) do
     (let ((dence-index (aref index-vector i)))
       (declare (type fixnum dence-index))
       (setf (aref result dence-index)
@@ -204,7 +204,7 @@
   (declare (type (simple-array double-float) dence-x pseudosparse-y result)
            (type (simple-array fixnum) index-vector)
            (optimize (speed 3) (safety 0)))
-  (loop for i from 0 to (1- (length index-vector)) do
+  (loop for i fixnum from 0 to (1- (length index-vector)) do
     (let ((dence-index (aref index-vector i)))
       (declare (type fixnum dence-index))
       (setf (aref result dence-index)
@@ -216,7 +216,7 @@
   (declare (type (simple-array double-float) dence-x pseudosparse-y result)
            (type (simple-array fixnum) index-vector)
            (optimize (speed 3) (safety 0)))
-  (loop for i from 0 to (1- (length index-vector)) do
+  (loop for i fixnum from 0 to (1- (length index-vector)) do
     (let ((dence-index (aref index-vector i)))
       (declare (type fixnum dence-index))
       (setf (aref result dence-index)
@@ -228,7 +228,7 @@
            (type (simple-array fixnum) index-vector)
            (type double-float n)
            (optimize (speed 3) (safety 0)))
-  (loop for i from 0 to (1- (length index-vector)) do
+  (loop for i fixnum from 0 to (1- (length index-vector)) do
     (let ((dence-index (aref index-vector i)))
       (declare (type fixnum dence-index))
       (setf (aref result dence-index)

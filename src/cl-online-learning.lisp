@@ -54,7 +54,6 @@
          (,learner ,input ,training-label)
        ,@body
        ,learner)
-
      (defun ,(intern (catstr (symbol-name learner-type) "-TRAIN"))
          (learner training-data)
        (etypecase training-data
@@ -65,14 +64,12 @@
            (,(intern (catstr (symbol-name learner-type) "-UPDATE"))
                      learner (cdr datum) (car datum)))))
        learner)
-
      (defun ,(intern (catstr (symbol-name learner-type) "-PREDICT"))
          (learner input)
        (sign (,(if (sparse-symbol? learner-type) 'sf 'f)
               input
               (,(intern (catstr (symbol-name learner-type) "-WEIGHT")) learner)
               (,(intern (catstr (symbol-name learner-type) "-BIAS")) learner))))
-
      (defun ,(intern (catstr (symbol-name learner-type) "-TEST"))
          (learner test-data &key (quiet-p nil))
        (let* ((len (length test-data))
@@ -118,9 +115,9 @@
                     :bias 0d0))
 
 (define-learner perceptron (learner input training-label)
-  (if (<= (* training-label (f input
-                               (perceptron-weight learner)
-                               (perceptron-bias learner))) 0d0)
+  (if (<= (* training-label
+             (f input (perceptron-weight learner) (perceptron-bias learner)))
+          0d0)
     (if (> training-label 0d0)
       (progn
         (v+ (perceptron-weight learner) input (perceptron-weight learner))
@@ -636,30 +633,15 @@
              (beta (/ (* alpha phi)
                       (+ (sqrt u) (* v alpha phi)))))
         ;; Update weight
-        (ps-v*n (sparse-scw-tmp-vec1 learner)
-                (* alpha training-label)
-                index-vector
-                (sparse-scw-tmp-vec2 learner))
-        (dps-v+ (sparse-scw-weight learner)
-                (sparse-scw-tmp-vec2 learner)
-                index-vector
-                (sparse-scw-weight learner))
+        (ps-v*n (sparse-scw-tmp-vec1 learner) (* alpha training-label) index-vector (sparse-scw-tmp-vec2 learner))
+        (dps-v+ (sparse-scw-weight learner) (sparse-scw-tmp-vec2 learner) index-vector (sparse-scw-weight learner))
         ;; Update bias
-        (setf (sparse-scw-bias learner) (+ (sparse-scw-bias learner)
-                                           (* alpha (sparse-scw-sigma0 learner) training-label)))
+        (setf (sparse-scw-bias learner)
+              (+ (sparse-scw-bias learner) (* alpha (sparse-scw-sigma0 learner) training-label)))
         ;; Update sigma
-        (dps-v* (sparse-scw-tmp-vec1 learner)
-                (sparse-scw-tmp-vec1 learner)
-                index-vector
-                (sparse-scw-tmp-vec1 learner))
-        (ps-v*n (sparse-scw-tmp-vec1 learner)
-                beta
-                index-vector
-                (sparse-scw-tmp-vec1 learner))
-        (dps-v- (sparse-scw-sigma learner)
-                (sparse-scw-tmp-vec1 learner)
-                index-vector
-                (sparse-scw-sigma learner))
+        (dps-v* (sparse-scw-tmp-vec1 learner) (sparse-scw-tmp-vec1 learner) index-vector (sparse-scw-tmp-vec1 learner))
+        (ps-v*n (sparse-scw-tmp-vec1 learner) beta index-vector (sparse-scw-tmp-vec1 learner))
+        (dps-v- (sparse-scw-sigma learner) (sparse-scw-tmp-vec1 learner) index-vector (sparse-scw-sigma learner))
         ;; Update sigma0
         (setf (sparse-scw-sigma0 learner)
               (- (sparse-scw-sigma0 learner)
