@@ -40,7 +40,7 @@
 (defmacro sf (input weight bias)
   `(+ (ds-dot ,weight ,input) ,bias))
 
-(eval-when (:compile-toplevel)
+(eval-when (:compile-toplevel :load-toplevel :execute)
   (defun sparse-symbol? (symbol)
     (let ((name (symbol-name symbol)))
       (and (> (length name) 7)

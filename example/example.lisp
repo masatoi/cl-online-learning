@@ -431,8 +431,14 @@
 
 (defparameter news20-arow-1vr (make-one-vs-rest news20-dim 20 'sparse-arow 10d0))
 
-(time (train news20-arow-1vr news20-train))
-(time (test news20-arow-1vr news20-test))
+(loop repeat 12 do
+  (train news20-arow-1vr news20-train))
+
+(test news20-arow-1vr news20-test)
+
+;; Accuracy: 86.90208%, Correct: 3470, Total: 3993
+
+(time )
 
 (loop repeat 10 do
   (train news20-arow-1vr news20-train)
