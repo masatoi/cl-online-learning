@@ -227,6 +227,10 @@
 ;;   18,461,632,884 processor cycles
 ;;   7,375,126,240 bytes consed
 
+(defparameter adam-learner (make-adam a9a-dim 0.001d0 0.001d0 1.d-8 0.9d0 0.99d0))
+(time (loop repeat 1000 do (train adam-learner a9a-train)))
+(test  adam-learner a9a-test)
+
 ;;; AROW++
 ;; ~/datasets $ arow_learn -i 1000 a9a a9a.arow.model
 ;; Number of features: 123

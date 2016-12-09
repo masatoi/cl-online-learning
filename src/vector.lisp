@@ -62,7 +62,7 @@
   result)
 
 (defun v-sqrt (x result)
-  (declare (type (simple-array double-float) x result)
+  (declare (type (simple-array (double-float 0d0)) x result)
            (optimize (speed 3) (safety 0)))
   (dovec x i (setf (aref result i) (sqrt (aref x i))))
   result)
