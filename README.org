@@ -95,6 +95,38 @@ ONE-VS-REST and ONE-VS-ONE are available for multiclass classification by using 
 ; Accuracy: 98.0%, Correct: 49, Total: 50
 #+END_SRC
 
+*** Sparse data
+For sparse data (most elements are 0), a data point is a pair of a class label and a instance of SPARSE-VECTOR struct, and use learners with SPARSE- prefix. READ-LIBSVM-DATA-SPARSE is available for make such a dataset.
+
+For example, news20.binary data has too high dimensional features to handle with normal learners. However, by using the sparse version, the learner can be trained with practical computational resources.
+#+BEGIN_SRC lisp
+(defparameter news20.binary-dim 1355191)
+(defparameter news20.binary (read-libsvm-data-sparse "/path/to/news20.binary"))
+
+(defparameter news20.binary.arow (make-sparse-arow news20.binary-dim 10d0))
+(time (loop repeat 20 do (train news20.binary.arow news20.binary)))
+;; Evaluation took:
+;;   1.678 seconds of real time
+;;   1.678322 seconds of total run time (1.678322 user, 0.000000 system)
+;;   100.00% CPU
+;;   5,691,734,984 processor cycles
+;;   59,933,584 bytes consed
+(test news20.binary.arow news20.binary)
+;; Accuracy: 99.74495%, Correct: 19945, Total: 19996
+#+END_SRC
+
+In a similar way, the sparse version learners are also available in multiclass classification.
+
+#+BEGIN_SRC lisp
+(defparameter news20-dim 62060)
+(defparameter news20-train (read-libsvm-data-sparse-multiclass "/path/to/news20.scale"))
+(defparameter news20-test (read-libsvm-data-sparse-multiclass "/path/to/news20.t.scale"))
+(defparameter news20-arow (make-one-vs-rest news20-dim 20 'sparse-arow 10d0))
+(loop repeat 12 do (train news20-arow news20-train))
+(test news20-arow news20-test)
+;; Accuracy: 86.90208%, Correct: 3470, Total: 3993
+#+END_SRC
+
 # *** Benchimark
 
 ** Author
