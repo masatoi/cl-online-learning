@@ -244,7 +244,7 @@
 (sb-sprof:with-profiling (:max-samples 10000
 				       :mode :alloc
 				       :report :flat)
-  (loop repeat 1000 do (arow-train arow-learner a9a-train)))
+  (loop repeat 100 do (train adam-learner a9a-train)))
 
 ;;; Multiclass
 

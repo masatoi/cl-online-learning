@@ -29,16 +29,25 @@
   `(concatenate 'string ,str1 ,str2))
 
 ;; Signum
-(defmacro sign (x)
-  `(if (> ,x 0d0) 1d0 -1d0))
+(defun sign (x)
+  (declare (type double-float x)
+           (optimize (speed 3) (safety 0)))
+  (if (> x 0d0) 1d0 -1d0))
 
 ;; Decision boundary
-(defmacro f (input weight bias)
-  `(+ (dot ,weight ,input) ,bias))
+(defun f (input weight bias)
+  (declare (type (simple-array double-float) input weight)
+           (type double-float bias)
+           (optimize (speed 3) (safety 0)))
+  (+ (dot weight input) bias))
 
 ;; Decision boundary (For sparse input)
-(defmacro sf (input weight bias)
-  `(+ (ds-dot ,weight ,input) ,bias))
+(defun sf (input weight bias)
+  (declare (type clol.vector::sparse-vector input)
+           (type (simple-array double-float) weight)
+           (type double-float bias)
+           (optimize (speed 3) (safety 0)))
+  (+ (ds-dot weight input) bias))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defun sparse-symbol? (symbol)
@@ -309,6 +318,7 @@
            (type (simple-array double-float) input-vector weight-vector tmp-vec result)
            (optimize (speed 3) (safety 0)))
   (let ((sigmoid-val (sigmoid (* training-label (f input-vector weight-vector bias)))))
+    (declare (type (double-float 0d0) sigmoid-val))
     ;; set gradient-vector to result
     (v*n input-vector
          (* (- 1d0 sigmoid-val) (- training-label))
