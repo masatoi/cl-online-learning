@@ -6,11 +6,11 @@
   (:nicknames :clol.vector)
   (:export
    :make-dvec :v+ :v- :v*n :v+n :v* :v/ :v-sqrt
-   :dot
+   :dot :dot!
    :sparse-vector-length :sparse-vector-index-vector :sparse-vector-value-vector
    :make-sparse-vector :make-empty-sparse-vector
    :s-v*n :sps-v*n
-   :ds-v+ :ds-v- :ds-v* :ds-v/ :ds-dot
+   :ds-v+ :ds-v- :ds-v* :ds-v/ :ds-dot :ds-dot!
    :dps-v+ :dps-v- :ps-v*n :dps-v*))
 
 (in-package :cl-online-learning.vector)
@@ -77,6 +77,16 @@
     (declare (type double-float result))
     (dovec x i (incf result (* (aref x i) (aref y i))))
     result))
+
+(defun dot! (x y result)
+  (declare (type (simple-array double-float) x y)
+           (type (simple-array double-float 1) result)
+           (optimize (speed 3) (safety 0)))
+  (let ((acc 0d0))
+    (declare (type double-float acc))
+    (dovec x i (incf acc (* (aref x i) (aref y i))))
+    (setf (aref result 0) acc))
+  result)
 
 ;;; Sparse vector operators
 
@@ -181,6 +191,22 @@
         (incf result
               (* (aref dence-x dence-index)
                  (aref (sparse-vector-value-vector sparse-y) i)))))
+    result))
+
+(defun ds-dot! (dence-x sparse-y result)
+  (declare (type sparse-vector sparse-y)
+           (type (simple-array double-float) dence-x)
+           (type (simple-array double-float 1) result)
+           (optimize (speed 3) (safety 0)))
+  (let ((acc 0d0))
+    (declare (type double-float acc))
+    (dosvec sparse-y i
+      (let ((dence-index (aref (sparse-vector-index-vector sparse-y) i)))
+        (declare (type fixnum dence-index))
+        (incf acc
+              (* (aref dence-x dence-index)
+                 (aref (sparse-vector-value-vector sparse-y) i)))))
+    (setf (aref result 0) acc)
     result))
 
 ;;; Use dence vector with index-vector of sparse-vector as sparse-vector (pseudosparse-vector)

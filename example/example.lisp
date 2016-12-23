@@ -115,6 +115,15 @@
 ;;   16,420,864,642 processor cycles
 ;;   1,674,411,648 bytes consed
 
+;; use f! and declare in -UPDATE function
+;; Evaluation took:
+;;   4.162 seconds of real time
+;;   4.147597 seconds of total run time (4.147597 user, 0.000000 system)
+;;   [ Run times consist of 0.005 seconds GC time, and 4.143 seconds non-GC time. ]
+;;   99.66% CPU
+;;   14,118,857,416 processor cycles
+;;   111,640,496 bytes consed
+
 ;;; CLOS version
 ;; Evaluation took:
 ;;   7.647 seconds of real time
@@ -128,6 +137,9 @@
 (defparameter a9a-test.sp  (read-libsvm-data-sparse "/home/wiz/tmp/a9a.t"))
 
 (defparameter perceptron-learner.sp (make-sparse-perceptron a9a-dim))
+
+;;(sparse-perceptron-update perceptron-learner.sp (cdar a9a-train.sp) (caar a9a-train.sp))
+
 (time (loop repeat 1000 do (train perceptron-learner.sp a9a-train.sp)))
 (test perceptron-learner.sp a9a-test.sp)
 
@@ -139,6 +151,15 @@
 ;;   100.22% CPU
 ;;   6,275,038,645 processor cycles
 ;;   1,674,553,424 bytes consed
+
+;; use sf!, ds-dot!
+;; Evaluation took:
+;;   1.087 seconds of real time
+;;   1.087332 seconds of total run time (1.079737 user, 0.007595 system)
+;;   [ Run times consist of 0.004 seconds GC time, and 1.084 seconds non-GC time. ]
+;;   100.00% CPU
+;;   3,685,724,247 processor cycles
+;;   111,641,760 bytes consed
 
 (defparameter arow-learner (make-arow a9a-dim 10d0))
 (time (loop repeat 1000 do (train arow-learner a9a-train)))
@@ -180,6 +201,30 @@
 ;;   50,808,360,960 processor cycles
 ;;   5,881,124,352 bytes consed
 
+;; Evaluation took:
+;;   13.638 seconds of real time
+;;   13.640413 seconds of total run time (13.616424 user, 0.023989 system)
+;;   [ Run times consist of 0.066 seconds GC time, and 13.575 seconds non-GC time. ]
+;;   100.01% CPU
+;;   46,262,175,788 processor cycles
+;;   2,307,751,392 bytes consed
+
+;; Evaluation took:
+;;   13.452 seconds of real time
+;;   13.456763 seconds of total run time (13.454677 user, 0.002086 system)
+;;   [ Run times consist of 0.018 seconds GC time, and 13.439 seconds non-GC time. ]
+;;   100.04% CPU
+;;   45,631,459,380 processor cycles
+;;   1,265,773,440 bytes consed
+
+;; Evaluation took:
+;;   13.324 seconds of real time
+;;   13.329676 seconds of total run time (13.321704 user, 0.007972 system)
+;;   [ Run times consist of 0.018 seconds GC time, and 13.312 seconds non-GC time. ]
+;;   100.05% CPU
+;;   45,197,249,772 processor cycles
+;;   1,265,792,672 bytes consed
+
 ;;; CLOS version
 ;; Evaluation took:
 ;;   31.187 seconds of real time
@@ -201,6 +246,32 @@
 ;;   17,976,932,767 processor cycles
 ;;   5,881,157,952 bytes consed
 
+;; use sf!, ds-dot!
+;; Evaluation took:
+;;   4.636 seconds of real time
+;;   4.644716 seconds of total run time (4.644704 user, 0.000012 system)
+;;   [ Run times consist of 0.074 seconds GC time, and 4.571 seconds non-GC time. ]
+;;   100.19% CPU
+;;   15,726,641,730 processor cycles
+;;   4,113,667,680 bytes consed
+
+;; declare type
+;; Evaluation took:
+;;   3.473 seconds of real time
+;;   3.478154 seconds of total run time (3.474138 user, 0.004016 system)
+;;   [ Run times consist of 0.041 seconds GC time, and 3.438 seconds non-GC time. ]
+;;   100.14% CPU
+;;   11,781,892,039 processor cycles
+;;   2,215,116,144 bytes consed
+
+;; Evaluation took:
+;;   3.175 seconds of real time
+;;   3.176213 seconds of total run time (3.176213 user, 0.000000 system)
+;;   [ Run times consist of 0.027 seconds GC time, and 3.150 seconds non-GC time. ]
+;;   100.03% CPU
+;;   10,767,676,763 processor cycles
+;;   1,265,828,608 bytes consed
+
 (defparameter scw-learner (make-scw a9a-dim 0.9d0 0.1d0))
 (time (loop repeat 1000 do (train scw-learner a9a-train)))
 (test scw-learner a9a-test)
@@ -215,6 +286,30 @@
 ;;   44,896,182,054 processor cycles
 ;;   7,375,026,592 bytes consed
 
+;; Evaluation took:
+;;   11.180 seconds of real time
+;;   11.142296 seconds of total run time (11.133413 user, 0.008883 system)
+;;   [ Run times consist of 0.022 seconds GC time, and 11.121 seconds non-GC time. ]
+;;   99.66% CPU
+;;   37,925,366,659 processor cycles
+;;   1,644,783,376 bytes consed
+
+;; Evaluation took:
+;;   10.753 seconds of real time
+;;   10.702306 seconds of total run time (10.690146 user, 0.012160 system)
+;;   [ Run times consist of 0.005 seconds GC time, and 10.698 seconds non-GC time. ]
+;;   99.53% CPU
+;;   36,474,629,265 processor cycles
+;;   329,023,488 bytes consed
+
+;; Evaluation took:
+;;   10.509 seconds of real time
+;;   10.511938 seconds of total run time (10.500368 user, 0.011570 system)
+;;   [ Run times consist of 0.005 seconds GC time, and 10.507 seconds non-GC time. ]
+;;   100.03% CPU
+;;   35,648,299,084 processor cycles
+;;   329,023,360 bytes consed
+
 (defparameter scw-learner.sp (make-sparse-scw a9a-dim 0.9d0 0.1d0))
 (time (loop repeat 1000 do (train scw-learner.sp a9a-train.sp)))
 (test scw-learner.sp a9a-test.sp)
@@ -226,6 +321,14 @@
 ;;   100.15% CPU
 ;;   18,461,632,884 processor cycles
 ;;   7,375,126,240 bytes consed
+
+;; Evaluation took:
+;;   2.524 seconds of real time
+;;   2.525696 seconds of total run time (2.525696 user, 0.000000 system)
+;;   [ Run times consist of 0.009 seconds GC time, and 2.517 seconds non-GC time. ]
+;;   100.08% CPU
+;;   8,564,202,770 processor cycles
+;;   329,047,584 bytes consed
 
 (defparameter adam-learner (make-adam a9a-dim 0.001d0 0.001d0 1.d-8 0.9d0 0.99d0))
 (time (loop repeat 1000 do (train adam-learner a9a-train)))
@@ -417,6 +520,13 @@
 ;;   100.07% CPU
 ;;   4,570,387,768 processor cycles
 ;;   337,618,400 bytes consed
+
+;; Evaluation took:
+;;   1.156 seconds of real time
+;;   1.156480 seconds of total run time (1.156480 user, 0.000000 system)
+;;   100.00% CPU
+;;   3,922,998,785 processor cycles
+;;   20,383,344 bytes consed
 
 ;;;;; news20 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

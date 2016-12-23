@@ -23,6 +23,15 @@
 
 (in-package :cl-online-learning)
 
+(declaim (type (simple-array double-float 1) *result*))
+(defvar *result* (make-dvec 1 0d0))
+
+(defmacro refr ()
+  '(aref *result* 0))
+
+(defmacro setr (val)
+  `(setf (refr) ,val))
+
 ;;; Utils
 
 (defmacro catstr (str1 str2)
@@ -41,6 +50,15 @@
            (optimize (speed 3) (safety 0)))
   (+ (dot weight input) bias))
 
+(defun f! (input weight bias result)
+  (declare (type (simple-array double-float) input weight)
+           (type (simple-array double-float 1) result)
+           (type double-float bias)
+           (optimize (speed 3) (safety 0)))
+  (dot! weight input result)
+  (setf (aref result 0) (+ (aref result 0) bias))
+  (values))
+
 ;; Decision boundary (For sparse input)
 (defun sf (input weight bias)
   (declare (type clol.vector::sparse-vector input)
@@ -48,6 +66,16 @@
            (type double-float bias)
            (optimize (speed 3) (safety 0)))
   (+ (ds-dot weight input) bias))
+
+(defun sf! (input weight bias result)
+  (declare (type clol.vector::sparse-vector input)
+           (type (simple-array double-float) weight)
+           (type double-float bias)
+           (type (simple-array double-float 1) result)
+           (optimize (speed 3) (safety 0)))
+  (ds-dot! weight input result)
+  (setf (aref result 0) (+ (aref result 0) bias))
+  (values))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defun sparse-symbol? (symbol)
@@ -61,6 +89,13 @@
   `(progn
      (defun ,(intern (catstr (symbol-name learner-type) "-UPDATE"))
          (,learner ,input ,training-label)
+       (declare (type ,learner-type ,learner)
+                (type ,(if (sparse-symbol? learner-type)
+                         'clol.vector::sparse-vector
+                         '(simple-array double-float))
+                      ,input)
+                (type double-float ,training-label)
+                (optimize (speed 3) (safety 0)))
        ,@body
        ,learner)
      (defun ,(intern (catstr (symbol-name learner-type) "-TRAIN"))
@@ -124,16 +159,17 @@
                     :bias 0d0))
 
 (define-learner perceptron (learner input training-label)
-  (if (<= (* training-label
-             (f input (perceptron-weight learner) (perceptron-bias learner)))
-          0d0)
-    (if (> training-label 0d0)
-      (progn
-        (v+ (perceptron-weight learner) input (perceptron-weight learner))
-        (setf (perceptron-bias learner) (+ (perceptron-bias learner) 1d0)))
-      (progn
-        (v- (perceptron-weight learner) input (perceptron-weight learner))
-        (setf (perceptron-bias learner) (- (perceptron-bias learner) 1d0))))))
+  (f! input (perceptron-weight learner) (perceptron-bias learner) *result*)
+  (when (<= (* training-label (refr)) 0d0)
+    (let ((bias (perceptron-bias learner)))
+      (declare (type double-float bias))
+      (if (> training-label 0d0)
+        (progn
+          (v+ (perceptron-weight learner) input (perceptron-weight learner))
+          (setf (perceptron-bias learner) (+ bias 1d0)))
+        (progn
+          (v- (perceptron-weight learner) input (perceptron-weight learner))
+          (setf (perceptron-bias learner) (- bias 1d0)))))))
 
 ;;; AROW
 
@@ -171,27 +207,31 @@
               :tmp-vec2 (make-dvec input-dimension 0d0)))
 
 (define-learner arow (learner input training-label)
-  (let ((loss (- 1d0 (* training-label (f input (arow-weight learner) (arow-bias learner))))))
-    (if (> loss 0d0)
-      (let* ((beta (/ 1d0 (+ (arow-sigma0 learner)
-			     (dot (v* (arow-sigma learner) input (arow-tmp-vec1 learner))
-                                  input)
-			     (arow-gamma learner))))
-	     (alpha (* loss beta)))
-	;; Update weight
-	(v*n (arow-tmp-vec1 learner) (* alpha training-label) (arow-tmp-vec2 learner))
-	(v+ (arow-weight learner) (arow-tmp-vec2 learner) (arow-weight learner))
-	;; Update bias
-	(setf (arow-bias learner) (+ (arow-bias learner) (* alpha (arow-sigma0 learner) training-label)))
-	;; Update sigma
-	(v* (arow-tmp-vec1 learner) (arow-tmp-vec1 learner) (arow-tmp-vec1 learner))
-	(v*n (arow-tmp-vec1 learner) beta (arow-tmp-vec1 learner))
-	(v- (arow-sigma learner) (arow-tmp-vec1 learner) (arow-sigma learner))
-	;; Update sigma0
-	(setf (arow-sigma0 learner)
-	      (- (arow-sigma0 learner)
-		 (* beta (arow-sigma0 learner)
-		    (arow-sigma0 learner))))))))
+  (f! input (arow-weight learner) (arow-bias learner) *result*)
+  (let ((loss (- 1d0 (* training-label (refr))))
+        (sigma0 (arow-sigma0 learner))
+        (gamma (arow-gamma learner))
+        (bias (arow-bias learner)))
+    (declare (type double-float loss sigma0 gamma bias))
+    (when (> loss 0d0)
+      (dot! (v* (arow-sigma learner) input (arow-tmp-vec1 learner))
+            input *result*)
+      (let ((beta (/ 1d0 (+ sigma0 (refr) gamma))))
+        (declare (type double-float beta))
+        (let ((alpha (* loss beta)))
+          (declare (type double-float alpha))
+          ;; Update weight
+          (v*n (arow-tmp-vec1 learner) (* alpha training-label) (arow-tmp-vec2 learner))
+          (v+ (arow-weight learner) (arow-tmp-vec2 learner) (arow-weight learner))
+          ;; Update bias
+          (setf (arow-bias learner) (+ bias (* alpha sigma0 training-label)))
+          ;; Update sigma
+          (v* (arow-tmp-vec1 learner) (arow-tmp-vec1 learner) (arow-tmp-vec1 learner))
+          (v*n (arow-tmp-vec1 learner) beta (arow-tmp-vec1 learner))
+          (v- (arow-sigma learner) (arow-tmp-vec1 learner) (arow-sigma learner))
+          ;; Update sigma0
+          (setf (arow-sigma0 learner)
+                (- sigma0 (* beta sigma0 sigma0))))))))
 
 ;;; SCW-I
 
@@ -257,45 +297,50 @@
      :tmp-vec2 (make-dvec input-dimension 0d0))))
 
 (define-learner scw (learner input training-label)
-  (let* ((phi (scw-phi learner))
-	 (m (* training-label (f input (scw-weight learner) (scw-bias learner))))
-	 (v (+ (scw-sigma0 learner)
-	       (dot (v* (scw-sigma learner) input (scw-tmp-vec1 learner))
-                    input)))
-	 (loss (- (* phi (sqrt v)) m)))
-    (if (> loss 0d0)
-      (let* ((psi (scw-psi learner))
-	     (zeta (scw-zeta learner))
-	     (alpha (min (scw-C learner)
-			 (max 0d0
-			      (- (sqrt (+ (/ (* m m phi phi phi phi) 4d0)
-					  (* v phi phi zeta)))
-				 (* m psi)))))
-	     (u (let ((base (- (sqrt (+ (* alpha alpha v v phi phi) (* 4d0 v))) (* alpha v phi))))
-		  (/ (* base base) 4d0)))
-	     (beta (/ (* alpha phi)
-		      (+ (sqrt u) (* v alpha phi)))))
-	;; Update weight
-	(v*n (scw-tmp-vec1 learner) (* alpha training-label) (scw-tmp-vec2 learner))
-	(v+ (scw-weight learner) (scw-tmp-vec2 learner) (scw-weight learner))
-	;; Update bias
-	(setf (scw-bias learner) (+ (scw-bias learner) (* alpha (scw-sigma0 learner) training-label)))
-	;; Update sigma
-	(v* (scw-tmp-vec1 learner) (scw-tmp-vec1 learner) (scw-tmp-vec1 learner))
-	(v*n (scw-tmp-vec1 learner) beta (scw-tmp-vec1 learner))
-	(v- (scw-sigma learner) (scw-tmp-vec1 learner) (scw-sigma learner))
-	;; Update sigma0
-	(setf (scw-sigma0 learner)
-	      (- (scw-sigma0 learner)
-		 (* beta (scw-sigma0 learner)
-		    (scw-sigma0 learner))))))))
+  (f! input (scw-weight learner) (scw-bias learner) *result*)
+  (let ((m (* training-label (refr)))
+        (bias (scw-bias learner))
+        (sigma0 (scw-sigma0 learner))
+        (phi (scw-phi learner))
+        (psi (scw-psi learner))
+        (zeta (scw-zeta learner))
+        (C (scw-C learner)))
+    (declare (type double-float m bias sigma0 phi psi zeta C))
+    (dot! (v* (scw-sigma learner) input (scw-tmp-vec1 learner)) input *result*)
+    (let ((v (+ sigma0 (refr))))
+      (declare (type (double-float 0d0) v))
+      (let ((loss (- (* phi (sqrt v)) m)))
+        (declare (type double-float loss))
+        (when (> loss 0d0)
+          (let ((alpha-sqrt-inner (+ (/ (* m m phi phi phi phi) 4d0) (* v phi phi zeta))))
+            (declare (type (double-float 0d0) alpha-sqrt-inner))
+            (let ((alpha (min C (max 0d0 (- (sqrt alpha-sqrt-inner) (* m psi))))))
+              (declare (type double-float alpha))
+              (let ((u-sqrt-inner (+ (* alpha alpha v v phi phi) (* 4d0 v))))
+                (declare (type (double-float 0d0) u-sqrt-inner))
+                (let ((u (let ((base (- (sqrt u-sqrt-inner) (* alpha v phi))))
+                           (declare (type double-float base))
+                           (/ (* base base) 4d0))))
+                  (declare (type (double-float 0d0) u))
+                  (let ((beta (/ (* alpha phi) (+ (sqrt u) (* v alpha phi)))))
+                    (declare (type double-float beta))
+                    ;; Update weight
+                    (v*n (scw-tmp-vec1 learner) (* alpha training-label) (scw-tmp-vec2 learner))
+                    (v+ (scw-weight learner) (scw-tmp-vec2 learner) (scw-weight learner))
+                    ;; Update bias
+                    (setf (scw-bias learner) (+ bias (* alpha sigma0 training-label)))
+                    ;; Update sigma
+                    (v* (scw-tmp-vec1 learner) (scw-tmp-vec1 learner) (scw-tmp-vec1 learner))
+                    (v*n (scw-tmp-vec1 learner) beta (scw-tmp-vec1 learner))
+                    (v- (scw-sigma learner) (scw-tmp-vec1 learner) (scw-sigma learner))
+                    ;; Update sigma0
+                    (setf (scw-sigma0 learner)
+                          (- sigma0 (* beta sigma0 sigma0)))))))))))))
 
 ;;; Logistic regression (L2 regularization)
 
-(defun sigmoid (x)
-  (declare (type double-float x)
-           (optimize (speed 3) (safety 0)))
-  (/ 1d0 (+ 1d0 (exp (- x)))))
+(defmacro sigmoid (x)
+  `(/ 1d0 (+ 1d0 (exp (- ,x)))))
 
 ;; (defun logistic-regression-gradient (training-label input-vector weight-vector C tmp-vec result)
 ;;   (v*n input-vector
@@ -479,16 +524,17 @@
                            :bias 0d0))
 
 (define-learner sparse-perceptron (learner input training-label)
-  (if (<= (* training-label (sf input
-                                (sparse-perceptron-weight learner)
-                                (sparse-perceptron-bias   learner))) 0d0)
-    (if (> training-label 0d0)
-      (progn
-        (ds-v+ (sparse-perceptron-weight learner) input (sparse-perceptron-weight learner))
-        (setf (sparse-perceptron-bias learner) (+ (sparse-perceptron-bias learner) 1d0)))
-      (progn
-        (ds-v- (sparse-perceptron-weight learner) input (sparse-perceptron-weight learner))
-        (setf (sparse-perceptron-bias learner) (- (sparse-perceptron-bias learner) 1d0))))))
+  (sf! input (sparse-perceptron-weight learner) (sparse-perceptron-bias learner) *result*)
+  (when (<= (* training-label (refr)) 0d0)
+    (let ((bias (sparse-perceptron-bias learner)))
+      (declare (type double-float bias))
+      (if (> training-label 0d0)
+        (progn
+          (ds-v+ (sparse-perceptron-weight learner) input (sparse-perceptron-weight learner))
+          (setf (sparse-perceptron-bias learner) (+ bias 1d0)))
+        (progn
+          (ds-v- (sparse-perceptron-weight learner) input (sparse-perceptron-weight learner))
+          (setf (sparse-perceptron-bias learner) (- bias 1d0)))))))
 
 ;;; Sparse AROW
 
@@ -526,47 +572,38 @@
                      :tmp-vec2 (make-dvec input-dimension 0d0)))
 
 (define-learner sparse-arow (learner input training-label)
+  (sf! input (sparse-arow-weight learner) (sparse-arow-bias learner) *result*)
   (let ((index-vector (sparse-vector-index-vector input))
-        (loss (- 1d0 (* training-label
-                        (sf input (sparse-arow-weight learner) (sparse-arow-bias learner))))))
-    (if (> loss 0d0)
-      (let* ((beta (/ 1d0 (+ (sparse-arow-sigma0 learner)
-			     (ds-dot (ds-v* (sparse-arow-sigma learner)
-                                            input
-                                            (sparse-arow-tmp-vec1 learner))
-                                     input)
-			     (sparse-arow-gamma learner))))
-	     (alpha (* loss beta)))
-	;; Update weight
-	(ps-v*n (sparse-arow-tmp-vec1 learner)
-                (* alpha training-label)
-                index-vector
-                (sparse-arow-tmp-vec2 learner))
-	(dps-v+ (sparse-arow-weight learner)
-                (sparse-arow-tmp-vec2 learner)
-                index-vector
-                (sparse-arow-weight learner))
-	;; Update bias
-	(setf (sparse-arow-bias learner) (+ (sparse-arow-bias learner)
-                                            (* alpha (sparse-arow-sigma0 learner) training-label)))
-	;; Update sigma
-	(dps-v* (sparse-arow-tmp-vec1 learner)
-                (sparse-arow-tmp-vec1 learner)
-                index-vector
-                (sparse-arow-tmp-vec1 learner))
-	(ps-v*n (sparse-arow-tmp-vec1 learner)
-                beta
-                index-vector
-                (sparse-arow-tmp-vec1 learner))
-	(dps-v- (sparse-arow-sigma learner)
-                (sparse-arow-tmp-vec1 learner)
-                index-vector
-                (sparse-arow-sigma learner))
-	;; Update sigma0
-	(setf (sparse-arow-sigma0 learner)
-	      (- (sparse-arow-sigma0 learner)
-		 (* beta (sparse-arow-sigma0 learner)
-		    (sparse-arow-sigma0 learner))))))))
+        (loss (- 1d0 (* training-label (refr))))
+        (bias (sparse-arow-bias learner))
+        (sigma0 (sparse-arow-sigma0 learner))
+        (gamma (sparse-arow-gamma learner)))
+    (declare (type (simple-array fixnum) index-vector)
+             (type double-float loss bias sigma0 gamma))
+    (when (> loss 0d0)
+      (ds-dot! (ds-v* (sparse-arow-sigma learner) input (sparse-arow-tmp-vec1 learner))
+               input *result*)
+      (let ((beta (/ 1d0 (+ sigma0 (refr) gamma))))
+        (declare (type double-float beta))
+        (let ((alpha (* loss beta)))
+          (declare (type double-float alpha))
+          ;; Update weight
+          (ps-v*n (sparse-arow-tmp-vec1 learner) (* alpha training-label) index-vector
+                  (sparse-arow-tmp-vec2 learner))
+          (dps-v+ (sparse-arow-weight learner) (sparse-arow-tmp-vec2 learner) index-vector
+                  (sparse-arow-weight learner))
+          ;; Update bias
+          (setf (sparse-arow-bias learner) (+ bias (* alpha sigma0 training-label)))
+          ;; Update sigma
+          (dps-v* (sparse-arow-tmp-vec1 learner) (sparse-arow-tmp-vec1 learner) index-vector
+                  (sparse-arow-tmp-vec1 learner))
+          (ps-v*n (sparse-arow-tmp-vec1 learner) beta index-vector
+                  (sparse-arow-tmp-vec1 learner))
+          (dps-v- (sparse-arow-sigma learner) (sparse-arow-tmp-vec1 learner) index-vector
+                  (sparse-arow-sigma learner))
+          ;; Update sigma0
+          (setf (sparse-arow-sigma0 learner)
+                (- sigma0 (* beta sigma0 sigma0))))))))
 
 ;;; Sparse SCW-I
 
@@ -621,91 +658,100 @@
      :tmp-vec2 (make-dvec input-dimension 0d0))))
 
 (define-learner sparse-scw (learner input training-label)
-  (let* ((index-vector (sparse-vector-index-vector input))
-         (phi (sparse-scw-phi learner))
-         (m (* training-label (sf input (sparse-scw-weight learner) (sparse-scw-bias learner))))
-         (v (+ (sparse-scw-sigma0 learner)
-               (ds-dot (ds-v* (sparse-scw-sigma learner)
-                              input
-                              (sparse-scw-tmp-vec1 learner))
-                       input)))
-         (loss (- (* phi (sqrt v)) m)))
-    (if (> loss 0d0)
-      (let* ((psi (sparse-scw-psi learner))
-             (zeta (sparse-scw-zeta learner))
-             (alpha (min (sparse-scw-C learner)
-                         (max 0d0
-                              (- (sqrt (+ (/ (* m m phi phi phi phi) 4d0)
-                                          (* v phi phi zeta)))
-                                 (* m psi)))))
-             (u (let ((base (- (sqrt (+ (* alpha alpha v v phi phi) (* 4d0 v))) (* alpha v phi))))
-                  (/ (* base base) 4d0)))
-             (beta (/ (* alpha phi)
-                      (+ (sqrt u) (* v alpha phi)))))
-        ;; Update weight
-        (ps-v*n (sparse-scw-tmp-vec1 learner) (* alpha training-label) index-vector (sparse-scw-tmp-vec2 learner))
-        (dps-v+ (sparse-scw-weight learner) (sparse-scw-tmp-vec2 learner) index-vector (sparse-scw-weight learner))
-        ;; Update bias
-        (setf (sparse-scw-bias learner)
-              (+ (sparse-scw-bias learner) (* alpha (sparse-scw-sigma0 learner) training-label)))
-        ;; Update sigma
-        (dps-v* (sparse-scw-tmp-vec1 learner) (sparse-scw-tmp-vec1 learner) index-vector (sparse-scw-tmp-vec1 learner))
-        (ps-v*n (sparse-scw-tmp-vec1 learner) beta index-vector (sparse-scw-tmp-vec1 learner))
-        (dps-v- (sparse-scw-sigma learner) (sparse-scw-tmp-vec1 learner) index-vector (sparse-scw-sigma learner))
-        ;; Update sigma0
-        (setf (sparse-scw-sigma0 learner)
-              (- (sparse-scw-sigma0 learner)
-                 (* beta (sparse-scw-sigma0 learner)
-                    (sparse-scw-sigma0 learner))))))))
+  (sf! input (sparse-scw-weight learner) (sparse-scw-bias learner) *result*)
+  (let ((index-vector (sparse-vector-index-vector input))
+        (m (* training-label (refr)))
+        (bias (sparse-scw-bias learner))
+        (sigma0 (sparse-scw-sigma0 learner))
+        (phi (sparse-scw-phi learner))
+        (psi (sparse-scw-psi learner))
+        (zeta (sparse-scw-zeta learner))
+        (C (sparse-scw-C learner)))
+    (declare (type (simple-array fixnum) index-vector)
+             (type double-float m bias sigma0 phi psi zeta C))
+    (ds-dot! (ds-v* (sparse-scw-sigma learner) input (sparse-scw-tmp-vec1 learner)) input *result*)
+    (let ((v (+ sigma0 (refr))))
+      (declare (type (double-float 0d0) v))
+      (let ((loss (- (* phi (sqrt v)) m)))
+        (declare (type double-float loss))
+        (when (> loss 0d0)
+          (let ((alpha-sqrt-inner (+ (/ (* m m phi phi phi phi) 4d0) (* v phi phi zeta))))
+            (declare (type (double-float 0d0) alpha-sqrt-inner))
+            (let ((alpha (min C (max 0d0 (- (sqrt alpha-sqrt-inner) (* m psi))))))
+              (declare (type double-float alpha))
+              (let ((u-sqrt-inner (+ (* alpha alpha v v phi phi) (* 4d0 v))))
+                (declare (type (double-float 0d0) u-sqrt-inner))
+                (let ((u (let ((base (- (sqrt u-sqrt-inner) (* alpha v phi))))
+                           (declare (type double-float base))
+                           (/ (* base base) 4d0))))
+                  (declare (type (double-float 0d0) u))
+                  (let ((beta (/ (* alpha phi) (+ (sqrt u) (* v alpha phi)))))
+                    (declare (type double-float beta))
+                    ;; Update weight
+                    (ps-v*n (sparse-scw-tmp-vec1 learner) (* alpha training-label) index-vector
+                            (sparse-scw-tmp-vec2 learner))
+                    (dps-v+ (sparse-scw-weight learner) (sparse-scw-tmp-vec2 learner) index-vector
+                            (sparse-scw-weight learner))
+                    ;; Update bias
+                    (setf (sparse-scw-bias learner) (+ bias (* alpha sigma0 training-label)))
+                    ;; Update sigma
+                    (dps-v* (sparse-scw-tmp-vec1 learner) (sparse-scw-tmp-vec1 learner) index-vector
+                            (sparse-scw-tmp-vec1 learner))
+                    (ps-v*n (sparse-scw-tmp-vec1 learner) beta index-vector
+                            (sparse-scw-tmp-vec1 learner))
+                    (dps-v- (sparse-scw-sigma learner) (sparse-scw-tmp-vec1 learner) index-vector
+                            (sparse-scw-sigma learner))
+                    ;; Update sigma0
+                    (setf (sparse-scw-sigma0 learner)
+                          (- sigma0 (* beta sigma0 sigma0)))))))))))))
 
+;; ;;; Logistic regression model (Sparse)
 
-;;; Logistic regression model (Sparse)
+;; ;; tmp-vec is pseudosparse-vector,
 
-;; tmp-vec is pseudosparse-vector,
+;; (defun logistic-regression-gradient-sparse
+;;     (training-label input-vector weight-vector bias C tmp-vec result)
+;;   (declare (type double-float training-label bias C)
+;;            (type (simple-array double-float) weight-vector tmp-vec result)
+;;            (optimize (speed 3) (safety 0)))
+;;   (let ((sigmoid-val (sigmoid (* training-label (sf input-vector weight-vector bias)))))
+;;     (sps-v*n input-vector
+;;              (* (- 1d0 sigmoid-val) (- training-label))
+;;              tmp-vec)
+;;     (v*n weight-vector (* 2d0 C) result)
+;;     (v+ tmp-vec result result)
+;;     ;; return g0
+;;     (+ (* (- 1d0 sigmoid-val)
+;;           (- training-label))
+;;        (* 2d0 C bias))))
 
-(defun logistic-regression-gradient-sparse
-    (training-label input-vector weight-vector bias C tmp-vec result)
-  (declare (type double-float training-label bias C)
-           (type (simple-array double-float) weight-vector tmp-vec result)
-           (optimize (speed 3) (safety 0)))
-  (let ((sigmoid-val (sigmoid (* training-label (sf input-vector weight-vector bias)))))
-    (sps-v*n input-vector
-             (* (- 1d0 sigmoid-val) (- training-label))
-             tmp-vec)
-    (v*n weight-vector (* 2d0 C) result)
-    (v+ tmp-vec result result)
-    ;; return g0
-    (+ (* (- 1d0 sigmoid-val)
-          (- training-label))
-       (* 2d0 C bias))))
+;; ;;; Sparse lr+sgd
+;; (defstruct (sparse-sgd (:constructor %make-sparse-sgd))
+;;   input-dimension weight bias
+;;   ;; meta parameters
+;;   C eta g tmp-vec)
 
-;;; Sparse lr+sgd
-(defstruct (sparse-sgd (:constructor %make-sparse-sgd))
-  input-dimension weight bias
-  ;; meta parameters
-  C eta g tmp-vec)
+;; (defun make-sparse-sgd (input-dimension C eta)
+;;   (%make-sparse-sgd
+;;    :input-dimension input-dimension
+;;    :weight (make-dvec input-dimension 0d0)
+;;    :bias 0d0
+;;    :C C
+;;    :eta eta
+;;    :g (make-dvec input-dimension 0d0)
+;;    :tmp-vec (make-dvec input-dimension 0d0)))
 
-(defun make-sparse-sgd (input-dimension C eta)
-  (%make-sparse-sgd
-   :input-dimension input-dimension
-   :weight (make-dvec input-dimension 0d0)
-   :bias 0d0
-   :C C
-   :eta eta
-   :g (make-dvec input-dimension 0d0)
-   :tmp-vec (make-dvec input-dimension 0d0)))
+;; (define-learner sparse-sgd (learner input training-label)
+;;   ;; calc g (gradient)
+;;   (let ((g0 (logistic-regression-gradient-sparse
+;;              training-label input
+;;              (sparse-sgd-weight learner) (sparse-sgd-bias learner)
+;;              (sparse-sgd-C learner) (sparse-sgd-tmp-vec learner) (sparse-sgd-g learner))))
+;;     (v*n (sparse-sgd-g learner) (sparse-sgd-eta learner) (sparse-sgd-g learner))
+;;     (v- (sparse-sgd-weight learner) (sparse-sgd-g learner) (sparse-sgd-weight learner))
 
-(define-learner sparse-sgd (learner input training-label)
-  ;; calc g (gradient)
-  (let ((g0 (logistic-regression-gradient-sparse
-             training-label input
-             (sparse-sgd-weight learner) (sparse-sgd-bias learner)
-             (sparse-sgd-C learner) (sparse-sgd-tmp-vec learner) (sparse-sgd-g learner))))
-    (v*n (sparse-sgd-g learner) (sparse-sgd-eta learner) (sparse-sgd-g learner))
-    (v- (sparse-sgd-weight learner) (sparse-sgd-g learner) (sparse-sgd-weight learner))
-
-    (setf (sparse-sgd-bias learner)
-          (- (sparse-sgd-bias learner) (* (sparse-sgd-eta learner) g0)))))
+;;     (setf (sparse-sgd-bias learner)
+;;           (- (sparse-sgd-bias learner) (* (sparse-sgd-eta learner) g0)))))
 
 ;;;; Multiclass classifiers ;;;;
 
