@@ -25,7 +25,8 @@
 ;;;;;;;;;;;;;;;; Dence, Binary ;;;;;;;;;;;;;;;;;
 (format t ";;;;;;;;;;;;;;;; Dence, Binary ;;;;;;;;;;;;;;;;;~%")
 
-;; Test1: read libsvm dataset
+;;; Read libsvm datasetn
+(format t ";;; Read libsvm dataset~%")
 (is (progn
       (setf a1a
 	    (read-libsvm-data (merge-pathnames
@@ -47,7 +48,8 @@
 	  0.0d0 0.0d0 0.0d0))
     :test #'equalp)
 
-;; Test2,3: make and train perceptron learner
+;;; Perceptron learner
+(format t ";;; Perceptron learner~%")
 (defvar perceptron-learner)
 
 (is (progn
@@ -69,14 +71,14 @@
 
 (is (clol::perceptron-bias perceptron-learner) -2.0d0 :test #'approximately-equal)
 
-;; Test4: test perceptron learner
 (is (multiple-value-bind (accuracy n-correct n-total)
 	(test perceptron-learner a1a)
       (list accuracy n-correct n-total))
     '(82.61682 1326 1605)
     :test #'approximately-equal)
 
-;; Test5,6 make and train AROW learner
+;;; AROW learner
+(format t ";;; AROW learner~%")
 (defvar arow-learner)
 
 (is (progn
@@ -127,14 +129,14 @@
     -0.11614147964826764d0
     :test #'approximately-equal)
 
-;; Test7: test AROW learner
 (is (multiple-value-bind (accuracy n-correct n-total)
 	(test arow-learner a1a)
       (list accuracy n-correct n-total))
     '(84.85981 1362 1605)
     :test #'approximately-equal)
 
-;; Test8,9 make and train SCW-I learner
+;;; SCW-I learner
+(format t ";;; SCW-I learner~%")
 (defvar scw-learner)
 
 (is (progn
@@ -180,11 +182,126 @@
     -0.4139374405086192d0
     :test #'approximately-equal)
 
-;; Test10: test SCW-I learner
 (is (multiple-value-bind (accuracy n-correct n-total)
 	(test scw-learner a1a)
       (list accuracy n-correct n-total))
     '(84.610596 1358 1605)
+    :test #'approximately-equal)
+
+;;; Logistic Regression (SGD)
+(format t ";;; Logistic Regression (SGD)~%")
+(defvar lr+sgd-learner)
+
+(is (progn
+      (setf lr+sgd-learner (make-lr+sgd a1a-dim 0.00001d0 0.01d0))
+      (train lr+sgd-learner a1a)
+      (clol::lr+sgd-weight lr+sgd-learner))
+    #(-0.36881621064588094d0 -0.2109454466763342d0 0.016270302970254585d0
+      0.2236867740245935d0 0.0930982322778365d0 -0.23601507864401866d0
+      -0.0348626343142817d0 0.06439153155771717d0 0.07224041888619455d0
+      0.03625055652741897d0 -0.02030958509205901d0 0.0d0 -0.001349107664328575d0
+      -0.07037046246806451d0 0.00599586226872607d0 -0.06235239651753239d0
+      -0.01858070844600174d0 -0.10139864288665797d0 0.15158608254633785d0
+      -0.14325727798678298d0 -0.06669865766805069d0 -0.20886896794410412d0
+      0.07952545997541714d0 -0.042822416464826214d0 0.048458672685419514d0
+      -0.054841135081041874d0 -0.05168370951368017d0 -0.017472101168014988d0
+      0.11370200917939727d0 -0.01760956386856953d0 -0.0566093104254412d0
+      0.09448320268783302d0 -0.06511476575148469d0 -0.009483869251938734d0
+      -0.33951311272822204d0 -0.20886896794410412d0 -0.14325727798678298d0
+      0.005636256220593346d0 0.4392967543889846d0 0.5586136516444125d0
+      -0.1856973016796527d0 -0.4908949814587519d0 -0.03700569727463587d0
+      -0.06808840197714093d0 -0.02924061984270779d0 0.005607002538947162d0
+      0.0343118070860204d0 -0.1061470624710557d0 -0.19145728289752112d0
+      -0.02793792780795849d0 0.3183204005194685d0 0.1521039134911977d0
+      -0.0435382927722097d0 -0.0600373853463339d0 -0.05692257408780274d0
+      -0.044925520131624624d0 -0.07017263609642849d0 -0.012001131948685496d0
+      -0.00990109861609472d0 0.0d0 0.1573458207043665d0 -0.2681505983398473d0
+      0.42661738492662493d0 -0.32418306235199246d0 -0.08381425443527574d0
+      -0.15452163855340792d0 -0.0586179760689122d0 -0.013798340934802339d0
+      -0.057713840801657694d0 -0.009040412625050473d0 -0.10753577761910862d0
+      -0.2728516704455447d0 0.026145322396013783d0 -0.5224951778676266d0
+      0.2757888298180947d0 -0.34409585073282073d0 0.09738950268329043d0
+      -0.26049568835939907d0 -0.016536440549221623d0 -0.1737567171207471d0
+      0.045008817448182095d0 0.15907368053165505d0 -0.10197318110367193d0
+      0.0031913571736071145d0 -0.010020110867023842d0 -0.01944864775369861d0
+      -0.0015532675213777096d0 9.459524125510271d-4 0.0d0 -0.00537386868203403d0
+      0.016046112111028528d0 0.002887084636550959d0 -0.0032298519891403475d0
+      -0.00634924645445382d0 -0.002270439109307006d0 0.0d0 -8.996515459814866d-4
+      0.00787000746030618d0 0.013769827321745733d0 -0.008399246336239613d0
+      -0.0045356958500349966d0 -0.005148052711243364d0 -0.05857116865618538d0
+      0.0034863277703288766d0 -0.0037686659890623594d0 -0.0010810836438453553d0
+      -0.00856467247477334d0 -4.288628700049655d-4 7.540948477187569d-4
+      -1.832974669318892d-5 0.0d0 6.843995139695201d-4 -0.005146256792589131d0
+      -0.010830981730421676d0 -7.994785185899475d-4 0.0d0 -0.0019503444707653175d0
+      0.007022525852400634d0 -0.016066838767427184d0 0.0d0 0.0d0 0.0d0 0.0d0)
+    :test #'approximately-equal)
+
+(is (clol::lr+sgd-bias lr+sgd-learner)
+    -0.24670634804953057d0
+    :test #'approximately-equal)
+
+(is (multiple-value-bind (accuracy n-correct n-total)
+	(test lr+sgd-learner a1a)
+      (list accuracy n-correct n-total))
+    '(82.61682 1326 1605)
+    :test #'approximately-equal)
+
+;;; Logistic Regression (ADAM)
+(format t ";;; Logistic Regression (ADAM)~%")
+(defvar lr+adam-learner)
+
+(is (progn
+      (setf lr+adam-learner (make-lr+adam a1a-dim 0.000001d0 0.001d0 1.d-8 0.9d0 0.99d0))
+      (train lr+adam-learner a1a)
+      (clol::lr+adam-weight lr+adam-learner))
+    #(-0.48907681447856016d0 -0.18050687671515786d0 -0.014161012844221556d0
+      0.11360342407468896d0 0.04946066410774223d0 -0.13983957480059395d0
+      -0.02320145747495363d0 0.06639069337654223d0 0.06253394072991883d0
+      0.024222607306911587d0 -0.027367566602044254d0 0.0d0 -0.01044822638428894d0
+      -0.05601824787784897d0 -0.019226417565802664d0 -0.06232108256738559d0
+      -0.04115410798274551d0 -0.09485181264656574d0 0.10142847086945721d0
+      -0.1466374436009795d0 -0.1491662871843062d0 -0.16829268711269735d0
+      0.09995793175865524d0 -0.07946577136326531d0 0.02734982211338315d0
+      -0.1378582260335471d0 -0.14670921504454823d0 -0.0881435047397066d0
+      0.10917128855226148d0 -0.05644814485327269d0 -0.1434249688558034d0
+      0.11380375393060943d0 -0.15318930922876456d0 -0.044151983336675686d0
+      -0.34870557687598885d0 -0.16829268711269735d0 -0.1466374436009795d0
+      -0.018791984708947634d0 0.22056052261004677d0 0.22335897426518092d0
+      -0.2607789294947696d0 -0.4664595920840015d0 -0.12180249629317684d0
+      -0.19215948583755024d0 -0.10522095728881921d0 0.0010170447344466477d0
+      -0.009000800592536167d0 -0.09875066133137891d0 -0.3220371148345146d0
+      -0.052699127737915324d0 0.19866225571534438d0 0.09891677565112698d0
+      -0.11473291424347934d0 -0.11030193085261719d0 -0.09509080676285352d0
+      -0.07310502620368269d0 -0.10203579932658502d0 -0.06055926530342877d0
+      -0.04763098337553357d0 0.0d0 0.11875853472338706d0 -0.43056476304290436d0
+      0.19649544524338208d0 -0.3171348053676226d0 -0.24464063209385045d0
+      -0.2678519891453484d0 -0.05136453458549955d0 -0.05740290389761139d0
+      -0.1443723763841522d0 -0.04310262695138283d0 -0.14407312915069334d0
+      -0.2537762422445041d0 0.013314108253626321d0 -0.2064635786557003d0
+      0.21090720268344784d0 -0.13794812179323712d0 0.08180150330710746d0
+      -0.26658054310351664d0 -0.06083006948537366d0 -0.10912011027142135d0
+      0.014130277565334224d0 0.09050726713651203d0 -0.0695463659288662d0
+      -0.010150181435273008d0 -0.033789530431050256d0 -0.07152540781994178d0
+      -0.016378799266989246d0 -0.008247583866457126d0 0.0d0 -0.011465892892965707d0
+      0.020801654476260065d0 -6.524200701080515d-5 -0.021063113126076696d0
+      -0.020865118917193403d0 -0.018140311873895018d0 0.0d0 -0.010462223952850437d0
+      0.009200104855950637d0 0.012759113605810305d0 -0.03009144074930959d0
+      -0.019086631968453036d0 -0.03048238691875727d0 -0.13885589686478697d0
+      0.01047473024758489d0 -0.010413797486794774d0 -0.010473885058452311d0
+      -0.02381497273318185d0 -0.010472110960605902d0 -3.101267084657952d-7
+      -0.018090170066433802d0 0.0d0 -0.004680877733711436d0 -0.01047178780163071d0
+      -0.04864277351043214d0 -0.010468781799816512d0 0.0d0 -0.01855291347487044d0
+      0.010454803973065837d0 -0.06692309044948563d0 0.0d0 0.0d0 0.0d0 0.0d0)
+    :test #'approximately-equal)
+
+(is (clol::lr+adam-bias lr+adam-learner)
+    -0.10311418846510162d0
+    :test #'approximately-equal)
+
+(is (multiple-value-bind (accuracy n-correct n-total)
+	(test lr+adam-learner a1a)
+      (list accuracy n-correct n-total))
+    '(82.24299 1320 1605)
     :test #'approximately-equal)
 
 ;;;;;;;;;;;;;;;; Sparse, Binary ;;;;;;;;;;;;;;;;;
@@ -192,7 +309,8 @@
 
 (defvar a1a.sp)
 
-;; Test11: read libsvm dataset (Sparse)
+;;; Read libsvm dataset (Sparse)
+(format t ";;; Read libsvm dataset (Sparse)~%")
 (is (progn
       (setf a1a.sp
 	    (read-libsvm-data-sparse
@@ -207,7 +325,8 @@
       #(1.0d0 1.0d0 1.0d0 1.0d0 1.0d0 1.0d0 1.0d0 1.0d0 1.0d0 1.0d0 1.0d0 1.0d0 1.0d0 1.0d0))
     :test #'equalp)
 
-;; Test12,13: make and train sparse-perceptron learner
+;;; Sparse-perceptron learner
+(format t ";;; Sparse-perceptron learner~%")
 (defvar sparse-perceptron-learner)
 
 (is (progn
@@ -229,14 +348,14 @@
 
 (is (clol::sparse-perceptron-bias sparse-perceptron-learner) -2.0d0 :test #'approximately-equal)
 
-;; Test14: test sparse perceptron learner
 (is (multiple-value-bind (accuracy n-correct n-total)
 	(test sparse-perceptron-learner a1a.sp)
       (list accuracy n-correct n-total))
     '(82.61682 1326 1605)
     :test #'approximately-equal)
 
-;; Test15,16 make and train sparse AROW learner
+;;; Sparse AROW learner
+(format t ";;; Sparse AROW learner~%")
 (defvar sparse-arow-learner)
 
 (is (progn
@@ -287,14 +406,14 @@
     -0.11614147964826764d0
     :test #'approximately-equal)
 
-;; Test17: test sparse AROW learner
 (is (multiple-value-bind (accuracy n-correct n-total)
 	(test sparse-arow-learner a1a.sp)
       (list accuracy n-correct n-total))
     '(84.85981 1362 1605)
     :test #'approximately-equal)
 
-;; Test18,19 make and train sparse SCW-I learner
+;;; Sparse SCW-I learner
+(format t ";;; Sparse SCW-I learner~%")
 (defvar sparse-scw-learner)
 
 (is (progn
@@ -340,17 +459,133 @@
     -0.4139374405086192d0
     :test #'approximately-equal)
 
-;; Test20: test sparse SCW-I learner
 (is (multiple-value-bind (accuracy n-correct n-total)
 	(test sparse-scw-learner a1a.sp)
       (list accuracy n-correct n-total))
     '(84.610596 1358 1605)
     :test #'approximately-equal)
 
+;;; Sparse Logistic Regression (SGD)
+(format t ";;; Sparse Logistic Regression (SGD)~%")
+(defvar sparse-lr+sgd-learner)
+
+(is (progn
+      (setf sparse-lr+sgd-learner (make-sparse-lr+sgd a1a-dim 0.00001d0 0.01d0))
+      (train sparse-lr+sgd-learner a1a.sp)
+      (clol::sparse-lr+sgd-weight sparse-lr+sgd-learner))
+    #(-0.36881621064588094d0 -0.2109454466763342d0 0.016270302970254585d0
+      0.2236867740245935d0 0.0930982322778365d0 -0.23601507864401866d0
+      -0.0348626343142817d0 0.06439153155771717d0 0.07224041888619455d0
+      0.03625055652741897d0 -0.02030958509205901d0 0.0d0 -0.001349107664328575d0
+      -0.07037046246806451d0 0.00599586226872607d0 -0.06235239651753239d0
+      -0.01858070844600174d0 -0.10139864288665797d0 0.15158608254633785d0
+      -0.14325727798678298d0 -0.06669865766805069d0 -0.20886896794410412d0
+      0.07952545997541714d0 -0.042822416464826214d0 0.048458672685419514d0
+      -0.054841135081041874d0 -0.05168370951368017d0 -0.017472101168014988d0
+      0.11370200917939727d0 -0.01760956386856953d0 -0.0566093104254412d0
+      0.09448320268783302d0 -0.06511476575148469d0 -0.009483869251938734d0
+      -0.33951311272822204d0 -0.20886896794410412d0 -0.14325727798678298d0
+      0.005636256220593346d0 0.4392967543889846d0 0.5586136516444125d0
+      -0.1856973016796527d0 -0.4908949814587519d0 -0.03700569727463587d0
+      -0.06808840197714093d0 -0.02924061984270779d0 0.005607002538947162d0
+      0.0343118070860204d0 -0.1061470624710557d0 -0.19145728289752112d0
+      -0.02793792780795849d0 0.3183204005194685d0 0.1521039134911977d0
+      -0.0435382927722097d0 -0.0600373853463339d0 -0.05692257408780274d0
+      -0.044925520131624624d0 -0.07017263609642849d0 -0.012001131948685496d0
+      -0.00990109861609472d0 0.0d0 0.1573458207043665d0 -0.2681505983398473d0
+      0.42661738492662493d0 -0.32418306235199246d0 -0.08381425443527574d0
+      -0.15452163855340792d0 -0.0586179760689122d0 -0.013798340934802339d0
+      -0.057713840801657694d0 -0.009040412625050473d0 -0.10753577761910862d0
+      -0.2728516704455447d0 0.026145322396013783d0 -0.5224951778676266d0
+      0.2757888298180947d0 -0.34409585073282073d0 0.09738950268329043d0
+      -0.26049568835939907d0 -0.016536440549221623d0 -0.1737567171207471d0
+      0.045008817448182095d0 0.15907368053165505d0 -0.10197318110367193d0
+      0.0031913571736071145d0 -0.010020110867023842d0 -0.01944864775369861d0
+      -0.0015532675213777096d0 9.459524125510271d-4 0.0d0 -0.00537386868203403d0
+      0.016046112111028528d0 0.002887084636550959d0 -0.0032298519891403475d0
+      -0.00634924645445382d0 -0.002270439109307006d0 0.0d0 -8.996515459814866d-4
+      0.00787000746030618d0 0.013769827321745733d0 -0.008399246336239613d0
+      -0.0045356958500349966d0 -0.005148052711243364d0 -0.05857116865618538d0
+      0.0034863277703288766d0 -0.0037686659890623594d0 -0.0010810836438453553d0
+      -0.00856467247477334d0 -4.288628700049655d-4 7.540948477187569d-4
+      -1.832974669318892d-5 0.0d0 6.843995139695201d-4 -0.005146256792589131d0
+      -0.010830981730421676d0 -7.994785185899475d-4 0.0d0 -0.0019503444707653175d0
+      0.007022525852400634d0 -0.016066838767427184d0 0.0d0 0.0d0 0.0d0 0.0d0)
+    :test #'approximately-equal)
+
+(is (clol::sparse-lr+sgd-bias sparse-lr+sgd-learner)
+    -0.24670634804953057d0
+    :test #'approximately-equal)
+
+(is (multiple-value-bind (accuracy n-correct n-total)
+	(test sparse-lr+sgd-learner a1a.sp)
+      (list accuracy n-correct n-total))
+    '(82.61682 1326 1605)
+    :test #'approximately-equal)
+
+;;; Sparse Logistic Regression (ADAM)
+(format t ";;; Sparse Logistic Regression (ADAM)~%")
+(defvar sparse-lr+adam-learner)
+
+(is (progn
+      (setf sparse-lr+adam-learner (make-sparse-lr+adam a1a-dim 0.000001d0 0.001d0 1.d-8 0.9d0 0.99d0))
+      (train sparse-lr+adam-learner a1a.sp)
+      (clol::sparse-lr+adam-weight sparse-lr+adam-learner))
+    #(-0.48907681447856016d0 -0.18050687671515786d0 -0.014161012844221556d0
+      0.11360342407468896d0 0.04946066410774223d0 -0.13983957480059395d0
+      -0.02320145747495363d0 0.06639069337654223d0 0.06253394072991883d0
+      0.024222607306911587d0 -0.027367566602044254d0 0.0d0 -0.01044822638428894d0
+      -0.05601824787784897d0 -0.019226417565802664d0 -0.06232108256738559d0
+      -0.04115410798274551d0 -0.09485181264656574d0 0.10142847086945721d0
+      -0.1466374436009795d0 -0.1491662871843062d0 -0.16829268711269735d0
+      0.09995793175865524d0 -0.07946577136326531d0 0.02734982211338315d0
+      -0.1378582260335471d0 -0.14670921504454823d0 -0.0881435047397066d0
+      0.10917128855226148d0 -0.05644814485327269d0 -0.1434249688558034d0
+      0.11380375393060943d0 -0.15318930922876456d0 -0.044151983336675686d0
+      -0.34870557687598885d0 -0.16829268711269735d0 -0.1466374436009795d0
+      -0.018791984708947634d0 0.22056052261004677d0 0.22335897426518092d0
+      -0.2607789294947696d0 -0.4664595920840015d0 -0.12180249629317684d0
+      -0.19215948583755024d0 -0.10522095728881921d0 0.0010170447344466477d0
+      -0.009000800592536167d0 -0.09875066133137891d0 -0.3220371148345146d0
+      -0.052699127737915324d0 0.19866225571534438d0 0.09891677565112698d0
+      -0.11473291424347934d0 -0.11030193085261719d0 -0.09509080676285352d0
+      -0.07310502620368269d0 -0.10203579932658502d0 -0.06055926530342877d0
+      -0.04763098337553357d0 0.0d0 0.11875853472338706d0 -0.43056476304290436d0
+      0.19649544524338208d0 -0.3171348053676226d0 -0.24464063209385045d0
+      -0.2678519891453484d0 -0.05136453458549955d0 -0.05740290389761139d0
+      -0.1443723763841522d0 -0.04310262695138283d0 -0.14407312915069334d0
+      -0.2537762422445041d0 0.013314108253626321d0 -0.2064635786557003d0
+      0.21090720268344784d0 -0.13794812179323712d0 0.08180150330710746d0
+      -0.26658054310351664d0 -0.06083006948537366d0 -0.10912011027142135d0
+      0.014130277565334224d0 0.09050726713651203d0 -0.0695463659288662d0
+      -0.010150181435273008d0 -0.033789530431050256d0 -0.07152540781994178d0
+      -0.016378799266989246d0 -0.008247583866457126d0 0.0d0 -0.011465892892965707d0
+      0.020801654476260065d0 -6.524200701080515d-5 -0.021063113126076696d0
+      -0.020865118917193403d0 -0.018140311873895018d0 0.0d0 -0.010462223952850437d0
+      0.009200104855950637d0 0.012759113605810305d0 -0.03009144074930959d0
+      -0.019086631968453036d0 -0.03048238691875727d0 -0.13885589686478697d0
+      0.01047473024758489d0 -0.010413797486794774d0 -0.010473885058452311d0
+      -0.02381497273318185d0 -0.010472110960605902d0 -3.101267084657952d-7
+      -0.018090170066433802d0 0.0d0 -0.004680877733711436d0 -0.01047178780163071d0
+      -0.04864277351043214d0 -0.010468781799816512d0 0.0d0 -0.01855291347487044d0
+      0.010454803973065837d0 -0.06692309044948563d0 0.0d0 0.0d0 0.0d0 0.0d0)
+    :test #'approximately-equal)
+
+(is (clol::sparse-lr+adam-bias sparse-lr+adam-learner)
+    -0.10311418846510162d0
+    :test #'approximately-equal)
+
+(is (multiple-value-bind (accuracy n-correct n-total)
+	(test sparse-lr+adam-learner a1a.sp)
+      (list accuracy n-correct n-total))
+    '(82.24299 1320 1605)
+    :test #'approximately-equal)
+
 ;;;;;;;;;;;;;;;; Dence, Multiclass ;;;;;;;;;;;;;;;;;
 (format t ";;;;;;;;;;;;;;;; Dence, Multiclass ;;;;;;;;;;;;;;;;;~%")
 
-;; Test21: read libsvm dataset (Dence,Multiclass)
+;;; Read libsvm dataset (Dence, Multiclass)
+(format t ";;; Read libsvm dataset (Dence, Multiclass)~%")
 (defvar iris)
 (defparameter iris-dim 4)
 (is (progn
@@ -363,7 +598,10 @@
     '(0 . #(-0.5555559992790222d0 0.25d0 -0.8644070029258728d0 -0.9166669845581055d0))
     :test #'equalp)
 
-;; Test22,23: make and train perceptron learner (Dence, Multiclass (one-vs-rest))
+;;;;;;;;;;;;;;;; Dence, Multiclass (one-vs-rest) ;;;;;;;;;;;;;;;;;
+
+;;; Perceptron learner (Dence, Multiclass (one-vs-rest))
+(format t ";;; Perceptron learner (Dence, Multiclass (one-vs-rest))~%")
 (defvar mulc-perceptron-learner)
 
 (is (progn
@@ -378,14 +616,14 @@
      (aref (clol::one-vs-rest-learners-vector mulc-perceptron-learner) 0))
     -1.0d0 :test #'approximately-equal)
 
-;; Test24: test perceptron learner
 (is (multiple-value-bind (accuracy n-correct n-total)
 	(test mulc-perceptron-learner iris)
       (list accuracy n-correct n-total))
     '(66.66667 100 150)
     :test #'approximately-equal)
 
-;; Test25,26: make and train AROW learner (Dence, Multiclass (one-vs-rest))
+;;; AROW learner (Dence, Multiclass (one-vs-rest))
+(format t ";;; AROW learner (Dence, Multiclass (one-vs-rest))~%")
 (defvar mulc-arow-learner)
 
 (is (progn
@@ -400,14 +638,14 @@
      (aref (clol::one-vs-rest-learners-vector mulc-arow-learner) 0))
     -0.3442333370778729d0 :test #'approximately-equal)
 
-;; Test27: test AROW learner
 (is (multiple-value-bind (accuracy n-correct n-total)
 	(test mulc-arow-learner iris)
       (list accuracy n-correct n-total))
     '(73.333336 110 150)
     :test #'approximately-equal)
 
-;; Test28,29: make and train AROW learner (Dence, Multiclass (one-vs-rest))
+;;; SCW-I learner (Dence, Multiclass (one-vs-rest))
+(format t ";;; SCW-I learner (Dence, Multiclass (one-vs-rest))~%")
 (defvar mulc-scw-learner)
 
 (is (progn
@@ -422,14 +660,62 @@
      (aref (clol::one-vs-rest-learners-vector mulc-scw-learner) 0))
     -0.24043563357905703d0 :test #'approximately-equal)
 
-;; Test30: test SCW learner
 (is (multiple-value-bind (accuracy n-correct n-total)
 	(test mulc-scw-learner iris)
       (list accuracy n-correct n-total))
     '(88.666664 133 150)
     :test #'approximately-equal)
 
-;; Test31,32: make and train perceptron learner (Dence, Multiclass (one-vs-one))
+;;; LR+SGD learner (Dence, Multiclass (one-vs-rest))
+(format t ";;; LR+SGD learner (Dence, Multiclass (one-vs-rest))~%")
+(defvar mulc-lr+sgd-learner)
+
+(is (progn
+      (setf mulc-lr+sgd-learner (make-one-vs-rest iris-dim 3 'lr+sgd 0.00001d0 0.01d0))
+      (train mulc-lr+sgd-learner iris)
+      (clol::lr+sgd-weight
+       (aref (clol::one-vs-rest-learners-vector mulc-lr+sgd-learner) 0)))
+    #(-0.15150316153431137d0 0.1683222211892617d0 -0.30545788488251907d0
+      -0.30367035393883063d0)
+    :test #'approximately-equal)
+
+(is (clol::lr+sgd-bias
+     (aref (clol::one-vs-rest-learners-vector mulc-lr+sgd-learner) 0))
+    -0.23402926740095747d0 :test #'approximately-equal)
+
+(is (multiple-value-bind (accuracy n-correct n-total)
+	(test mulc-lr+sgd-learner iris)
+      (list accuracy n-correct n-total))
+    '(77.33333 116 150)
+    :test #'approximately-equal)
+
+;;; LR+ADAM learner (Dence, Multiclass (one-vs-rest))
+(format t ";;; LR+ADAM learner (Dence, Multiclass (one-vs-rest))~%")
+(defvar mulc-lr+adam-learner)
+
+(is (progn
+      (setf mulc-lr+adam-learner (make-one-vs-rest iris-dim 3 'lr+adam 0.000001d0 0.001d0 1.d-8 0.9d0 0.99d0))
+      (train mulc-lr+adam-learner iris)
+      (clol::lr+adam-weight
+       (aref (clol::one-vs-rest-learners-vector mulc-lr+adam-learner) 0)))
+    #(-0.07008647029789696d0 0.09384330828865659d0 -0.10773330977595216d0
+      -0.10142134921572328d0)
+    :test #'approximately-equal)
+
+(is (clol::lr+adam-bias
+     (aref (clol::one-vs-rest-learners-vector mulc-lr+adam-learner) 0))
+    -0.03275341035236527d0 :test #'approximately-equal)
+
+(is (multiple-value-bind (accuracy n-correct n-total)
+	(test mulc-lr+adam-learner iris)
+      (list accuracy n-correct n-total))
+    '(84.66667 127 150)
+    :test #'approximately-equal)
+
+;;;;;;;;;;;;;;;; Dence, Multiclass (one-vs-one) ;;;;;;;;;;;;;;;;;
+
+;;; Perceptron learner (Dence, Multiclass (one-vs-one))
+(format t ";;; Perceptron learner (Dence, Multiclass (one-vs-one))~%")
 (is (progn
       (setf mulc-perceptron-learner (make-one-vs-one iris-dim 3 'perceptron))
       (train mulc-perceptron-learner iris)
@@ -442,14 +728,14 @@
      (aref (clol::one-vs-one-learners-vector mulc-perceptron-learner) 0))
     -1.0d0 :test #'approximately-equal)
 
-;; Test33: test perceptron learner
 (is (multiple-value-bind (accuracy n-correct n-total)
 	(test mulc-perceptron-learner iris)
       (list accuracy n-correct n-total))
     '(78.0 117 150)
     :test #'approximately-equal)
 
-;; Test34,35: make and train AROW learner (Dence, Multiclass (one-vs-one))
+;;; AROW learner (Dence, Multiclass (one-vs-one))
+(format t ";;; AROW learner (Dence, Multiclass (one-vs-one))~%")
 (is (progn
       (setf mulc-arow-learner (make-one-vs-one iris-dim 3 'arow 10d0))
       (train mulc-arow-learner iris)
@@ -462,14 +748,14 @@
      (aref (clol::one-vs-one-learners-vector mulc-arow-learner) 0))
     -0.3038759171411332d0 :test #'approximately-equal)
 
-;; Test36: test AROW learner
 (is (multiple-value-bind (accuracy n-correct n-total)
 	(test mulc-arow-learner iris)
       (list accuracy n-correct n-total))
     '(89.33333 134 150)
     :test #'approximately-equal)
 
-;; Test37,38: make and train SCW learner (Dence, Multiclass (one-vs-one))
+;;; SCW-I learner (Dence, Multiclass (one-vs-one))
+(format t ";;; SCW-I learner (Dence, Multiclass (one-vs-one))~%")
 (is (progn
       (setf mulc-scw-learner (make-one-vs-one iris-dim 3 'scw 0.9d0 0.1d0))
       (train mulc-scw-learner iris)
@@ -482,17 +768,59 @@
      (aref (clol::one-vs-one-learners-vector mulc-scw-learner) 0))
     -0.21044518381781008d0 :test #'approximately-equal)
 
-;; Test39: test SCW learner
 (is (multiple-value-bind (accuracy n-correct n-total)
 	(test mulc-scw-learner iris)
       (list accuracy n-correct n-total))
     '(86.666664 130 150)
     :test #'approximately-equal)
 
+;;; LR+SGD learner (Dence, Multiclass (one-vs-one))
+(format t ";;; LR+SGD learner (Dence, Multiclass (one-vs-one))~%")
+(is (progn
+      (setf mulc-lr+sgd-learner (make-one-vs-one iris-dim 3 'lr+sgd 0.00001d0 0.01d0))
+      (train mulc-lr+sgd-learner iris)
+      (clol::lr+sgd-weight
+       (aref (clol::one-vs-one-learners-vector mulc-lr+sgd-learner) 0)))
+    #(-0.10322043002153082d0 0.1312568047049863d0 -0.20361859574889082d0
+      -0.19037167002757865d0)
+    :test #'approximately-equal)
+
+(is (clol::lr+sgd-bias
+     (aref (clol::one-vs-one-learners-vector mulc-lr+sgd-learner) 0))
+    -0.04390114607553918d0 :test #'approximately-equal)
+
+(is (multiple-value-bind (accuracy n-correct n-total)
+	(test mulc-lr+sgd-learner iris)
+      (list accuracy n-correct n-total))
+    '(78.66667 118 150)
+    :test #'approximately-equal)
+
+;;; LR+ADAM learner (Dence, Multiclass (one-vs-one))
+(format t ";;; LR+ADAM learner (Dence, Multiclass (one-vs-one))~%")
+(is (progn
+      (setf mulc-lr+adam-learner (make-one-vs-one iris-dim 3 'lr+adam 0.000001d0 0.001d0 1.d-8 0.9d0 0.99d0))
+      (train mulc-lr+adam-learner iris)
+      (clol::lr+adam-weight
+       (aref (clol::one-vs-one-learners-vector mulc-lr+adam-learner) 0)))
+    #(-0.04980132608223872d0 0.06574979405524517d0 -0.06675791521848336d0
+      -0.060556671425120535d0)
+    :test #'approximately-equal)
+
+(is (clol::lr+adam-bias
+     (aref (clol::one-vs-one-learners-vector mulc-lr+adam-learner) 0))
+    0.015819005389377694d0 :test #'approximately-equal)
+
+(is (multiple-value-bind (accuracy n-correct n-total)
+	(test mulc-lr+adam-learner iris)
+      (list accuracy n-correct n-total))
+    '(76.666664 115 150)
+    :test #'approximately-equal)
+
 ;;;;;;;;;;;;;;;; Sparse, Multiclass ;;;;;;;;;;;;;;;;;
 (format t ";;;;;;;;;;;;;;;; Sparse, Multiclass ;;;;;;;;;;;;;;;;;~%")
 
-;; Test40: read libsvm dataset (Sparse,Multiclass)
+;;; Read libsvm dataset (Sparse, Multiclass)
+(format t ";;; Read libsvm dataset (Sparse, Multiclass)~%")
 (defvar iris.sp)
 (is (progn
       (setf iris.sp
@@ -503,7 +831,10 @@
     #(-0.5555559992790222d0 0.25d0 -0.8644070029258728d0 -0.9166669845581055d0)
     :test #'equalp)
 
-;; Test41,42: make and train perceptron learner (Sparse, Multiclass (one-vs-rest))
+;;;;;;;;;;;;;;;; Sparse, Multiclass (one-vs-rest) ;;;;;;;;;;;;;;;;;
+
+;;; Perceptron learner (Sparse, Multiclass (one-vs-rest))
+(format t ";;; Perceptron learner (Sparse, Multiclass (one-vs-rest))~%")
 (defvar mulc-perceptron-learner.sp)
 
 (is (progn
@@ -518,14 +849,14 @@
      (aref (clol::one-vs-rest-learners-vector mulc-perceptron-learner.sp) 0))
     -1.0d0 :test #'approximately-equal)
 
-;; Test43: test perceptron learner
 (is (multiple-value-bind (accuracy n-correct n-total)
 	(test mulc-perceptron-learner.sp iris.sp)
       (list accuracy n-correct n-total))
     '(66.66667 100 150)
     :test #'approximately-equal)
 
-;; Test44,45: make and train AROW learner (Sparse, Multiclass (one-vs-rest))
+;;; AROW learner (Sparse, Multiclass (one-vs-rest))
+(format t ";;; AROW learner (Sparse, Multiclass (one-vs-rest))~%")
 (defvar mulc-arow-learner.sp)
 
 (is (progn
@@ -540,38 +871,85 @@
      (aref (clol::one-vs-rest-learners-vector mulc-arow-learner.sp) 0))
     -0.3442333370778729d0 :test #'approximately-equal)
 
-;; Test46: test AROW learner
 (is (multiple-value-bind (accuracy n-correct n-total)
 	(test mulc-arow-learner.sp iris.sp)
       (list accuracy n-correct n-total))
     '(73.333336 110 150)
     :test #'approximately-equal)
 
-;; ###
-
-;; Test47,48: make and train SCW learner (Sparse, Multiclass (one-vs-rest))
-(defvar mulc-scw-learner)
+;;; SCW-I learner (Sparse, Multiclass (one-vs-rest))
+(format t ";;; SCW-I learner (Sparse, Multiclass (one-vs-rest))~%")
+(defvar mulc-scw-learner.sp)
 
 (is (progn
-      (setf mulc-scw-learner (make-one-vs-rest iris-dim 3 'sparse-scw 0.9d0 0.1d0))
-      (train mulc-scw-learner iris.sp)
+      (setf mulc-scw-learner.sp (make-one-vs-rest iris-dim 3 'sparse-scw 0.9d0 0.1d0))
+      (train mulc-scw-learner.sp iris.sp)
       (clol::sparse-scw-weight
-       (aref (clol::one-vs-rest-learners-vector mulc-scw-learner) 0)))
+       (aref (clol::one-vs-rest-learners-vector mulc-scw-learner.sp) 0)))
     #(-0.3232863624199869d0 1.0381009901897549d0 -0.9833106495827619d0 -0.7999598271841444d0)
     :test #'approximately-equal)
 
 (is (clol::sparse-scw-bias
-     (aref (clol::one-vs-rest-learners-vector mulc-scw-learner) 0))
+     (aref (clol::one-vs-rest-learners-vector mulc-scw-learner.sp) 0))
     -0.24043563357905703d0 :test #'approximately-equal)
 
-;; Test49: test SCW learner
 (is (multiple-value-bind (accuracy n-correct n-total)
-	(test mulc-scw-learner iris.sp)
+	(test mulc-scw-learner.sp iris.sp)
       (list accuracy n-correct n-total))
     '(88.666664 133 150)
     :test #'approximately-equal)
 
-;; Test50,51: make and train perceptron learner (Sparse, Multiclass (one-vs-one))
+;;; LR+SGD learner (Sparse, Multiclass (one-vs-rest))
+(format t ";;; LR+SGD learner (Sparse, Multiclass (one-vs-rest))~%")
+(defvar mulc-lr+sgd-learner.sp)
+
+(is (progn
+      (setf mulc-lr+sgd-learner.sp (make-one-vs-rest iris-dim 3 'sparse-lr+sgd  0.00001d0 0.01d0))
+      (train mulc-lr+sgd-learner.sp iris.sp)
+      (clol::sparse-lr+sgd-weight
+       (aref (clol::one-vs-rest-learners-vector mulc-lr+sgd-learner.sp) 0)))
+    #(-0.15150316153431137d0 0.1683222211892617d0 -0.30545788488251907d0
+      -0.30367035393883063d0)
+    :test #'approximately-equal)
+
+(is (clol::sparse-lr+sgd-bias
+     (aref (clol::one-vs-rest-learners-vector mulc-lr+sgd-learner.sp) 0))
+    -0.23402926740095747d0 :test #'approximately-equal)
+
+(is (multiple-value-bind (accuracy n-correct n-total)
+	(test mulc-lr+sgd-learner.sp iris.sp)
+      (list accuracy n-correct n-total))
+    '(77.33333 116 150)
+    :test #'approximately-equal)
+
+;;; LR+ADAM learner (Sparse, Multiclass (one-vs-rest))
+(format t ";;; LR+ADAM learner (Sparse, Multiclass (one-vs-rest))~%")
+(defvar mulc-lr+adam-learner.sp)
+
+(is (progn
+      (setf mulc-lr+adam-learner.sp (make-one-vs-rest iris-dim 3 'sparse-lr+adam
+                                                      0.000001d0 0.001d0 1.d-8 0.9d0 0.99d0))
+      (train mulc-lr+adam-learner.sp iris.sp)
+      (clol::sparse-lr+adam-weight
+       (aref (clol::one-vs-rest-learners-vector mulc-lr+adam-learner.sp) 0)))
+    #(-0.07008647029789696d0 0.09384330828865659d0 -0.10773330977595216d0
+      -0.10142134921572328d0)
+    :test #'approximately-equal)
+
+(is (clol::sparse-lr+adam-bias
+     (aref (clol::one-vs-rest-learners-vector mulc-lr+adam-learner.sp) 0))
+    -0.03275341035236527d0 :test #'approximately-equal)
+
+(is (multiple-value-bind (accuracy n-correct n-total)
+	(test mulc-lr+adam-learner.sp iris.sp)
+      (list accuracy n-correct n-total))
+    '(84.66667 127 150)
+    :test #'approximately-equal)
+
+;;;;;;;;;;;;;;;; Sparse, Multiclass (one-vs-one) ;;;;;;;;;;;;;;;;;
+
+;;; Perceptron learner (Sparse, Multiclass (one-vs-one))
+(format t ";;; Perceptron learner (Sparse, Multiclass (one-vs-one))~%")
 (is (progn
       (setf mulc-perceptron-learner.sp (make-one-vs-one iris-dim 3 'sparse-perceptron))
       (train mulc-perceptron-learner.sp iris.sp)
@@ -584,14 +962,14 @@
      (aref (clol::one-vs-one-learners-vector mulc-perceptron-learner.sp) 0))
     -1.0d0 :test #'approximately-equal)
 
-;; Test52: test perceptron learner
 (is (multiple-value-bind (accuracy n-correct n-total)
 	(test mulc-perceptron-learner.sp iris.sp)
       (list accuracy n-correct n-total))
     '(78.0 117 150)
     :test #'approximately-equal)
 
-;; Test53,54: make and train AROW learner (Sparse, Multiclass (one-vs-one))
+;;; AROW learner (Sparse, Multiclass (one-vs-one))
+(format t ";;; AROW learner (Sparse, Multiclass (one-vs-one))~%")
 (is (progn
       (setf mulc-arow-learner.sp (make-one-vs-one iris-dim 3 'sparse-arow 10d0))
       (train mulc-arow-learner.sp iris.sp)
@@ -604,31 +982,74 @@
      (aref (clol::one-vs-one-learners-vector mulc-arow-learner.sp) 0))
     -0.3038759171411332d0 :test #'approximately-equal)
 
-;; Test55: test AROW learner
 (is (multiple-value-bind (accuracy n-correct n-total)
 	(test mulc-arow-learner.sp iris.sp)
       (list accuracy n-correct n-total))
     '(89.33333 134 150)
     :test #'approximately-equal)
 
-;; Test56,57: make and train AROW learner (Sparse, Multiclass (one-vs-one))
+;;; SCW-I learner (Sparse, Multiclass (one-vs-one))
+(format t ";;; SCW-I learner (Sparse, Multiclass (one-vs-one))~%")
 (is (progn
-      (setf mulc-scw-learner (make-one-vs-one iris-dim 3 'sparse-scw 0.9d0 0.1d0))
-      (train mulc-scw-learner iris.sp)
+      (setf mulc-scw-learner.sp (make-one-vs-one iris-dim 3 'sparse-scw 0.9d0 0.1d0))
+      (train mulc-scw-learner.sp iris.sp)
       (clol::sparse-scw-weight
-       (aref (clol::one-vs-one-learners-vector mulc-scw-learner) 0)))
+       (aref (clol::one-vs-one-learners-vector mulc-scw-learner.sp) 0)))
     #(-0.19852027692174887d0 1.0903772597349175d0 -0.8450390219534784d0 -0.6723408802848536d0)
     :test #'approximately-equal)
 
 (is (clol::sparse-scw-bias
-     (aref (clol::one-vs-one-learners-vector mulc-scw-learner) 0))
+     (aref (clol::one-vs-one-learners-vector mulc-scw-learner.sp) 0))
     -0.21044518381781008d0 :test #'approximately-equal)
 
-;; Test58: test SCW learner
 (is (multiple-value-bind (accuracy n-correct n-total)
-	(test mulc-scw-learner iris.sp)
+	(test mulc-scw-learner.sp iris.sp)
       (list accuracy n-correct n-total))
     '(86.666664 130 150)
     :test #'approximately-equal)
 
+;;; LR+SGD learner (Sparse, Multiclass (one-vs-one))
+(format t ";;; LR+SGD learner (Sparse, Multiclass (one-vs-one))~%")
+(is (progn
+      (setf mulc-lr+sgd-learner.sp (make-one-vs-one iris-dim 3 'sparse-lr+sgd  0.00001d0 0.01d0))
+      (train mulc-lr+sgd-learner.sp iris.sp)
+      (clol::sparse-lr+sgd-weight
+       (aref (clol::one-vs-one-learners-vector mulc-lr+sgd-learner.sp) 0)))
+    #(-0.10322043002153082d0 0.1312568047049863d0 -0.20361859574889082d0
+      -0.19037167002757865d0)
+    :test #'approximately-equal)
+
+(is (clol::sparse-lr+sgd-bias
+     (aref (clol::one-vs-one-learners-vector mulc-lr+sgd-learner.sp) 0))
+    -0.04390114607553918d0 :test #'approximately-equal)
+
+(is (multiple-value-bind (accuracy n-correct n-total)
+	(test mulc-lr+sgd-learner.sp iris.sp)
+      (list accuracy n-correct n-total))
+    '(78.66667 118 150)
+    :test #'approximately-equal)
+
+;;; LR+ADAM learner (Sparse, Multiclass (one-vs-one))
+(format t ";;; LR+ADAM learner (Sparse, Multiclass (one-vs-one))~%")
+(is (progn
+      (setf mulc-lr+adam-learner.sp (make-one-vs-one iris-dim 3 'sparse-lr+adam
+                                                      0.000001d0 0.001d0 1.d-8 0.9d0 0.99d0))
+      (train mulc-lr+adam-learner.sp iris.sp)
+      (clol::sparse-lr+adam-weight
+       (aref (clol::one-vs-one-learners-vector mulc-lr+adam-learner.sp) 0)))
+    #(-0.04980132608223872d0 0.06574979405524517d0 -0.06675791521848336d0
+      -0.060556671425120535d0)
+    :test #'approximately-equal)
+
+(is (clol::sparse-lr+adam-bias
+     (aref (clol::one-vs-one-learners-vector mulc-lr+adam-learner.sp) 0))
+    0.015819005389377694d0 :test #'approximately-equal)
+
+(is (multiple-value-bind (accuracy n-correct n-total)
+	(test mulc-lr+adam-learner.sp iris.sp)
+      (list accuracy n-correct n-total))
+    '(76.666664 115 150)
+    :test #'approximately-equal)
+
+;;; ende
 (finalize)

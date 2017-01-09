@@ -35,7 +35,7 @@
 (test sgd-learner a1a-test)
 
 (loop for C in '(0d0 0.00001d0 0.0001d0 0.001d0 0.01d0 0.1d0 1d0) do
-  (defparameter sgd-learner (clol::make-sgd a1a-dim C 0.01d0))
+  (defparameter sgd-learner (clol::make-lr+sgd a1a-dim C 0.01d0))
   (print (clol::sgd-C sgd-learner))
   (loop repeat 20 do
     (train sgd-learner a1a-train)
@@ -370,7 +370,7 @@
 
 ;; Accuracy: 85.129906%, Correct: 13860, Total: 16281
 
-(defparameter adam-learner (make-adam a9a-dim 0.001d0 0.001d0 1.d-8 0.9d0 0.99d0))
+(defparameter adam-learner (make-lr+adam a9a-dim 0.001d0 0.001d0 1.d-8 0.9d0 0.99d0))
 (time (loop repeat 1000 do (train adam-learner a9a-train)))
 (test  adam-learner a9a-test)
 
@@ -743,12 +743,12 @@
   (train cod-rna-arow cod-rna)
   (test cod-rna-arow cod-rna.t))
 
-(defparameter cod-rna-sgd (make-sgd cod-rna-dim 0.000000001d0 0.001d0))
+(defparameter cod-rna-sgd (make-lr+sgd cod-rna-dim 0.000000001d0 0.001d0))
 (loop repeat 20 do
   (train cod-rna-sgd cod-rna)
   (test cod-rna-sgd cod-rna.t))
 
-(defparameter cod-rna-adam (make-adam cod-rna-dim 0.00000000000000000001d0 0.001d0 1.d-8 0.9d0 0.99d0))
+(defparameter cod-rna-adam (make-lr+adam cod-rna-dim 0.00000000000000000001d0 0.001d0 1.d-8 0.9d0 0.99d0))
 (loop repeat 20 do
   (train cod-rna-adam cod-rna)
   (test cod-rna-adam cod-rna.t))
@@ -818,20 +818,20 @@
   (train scw-learner gisette-train)
   (test scw-learner gisette-test))
 
-(defparameter sgd-learner (make-sgd gisette-dim 0.00001d0 0.01d0))
+(defparameter sgd-learner (make-lr+sgd gisette-dim 0.00001d0 0.01d0))
 (loop repeat 20 do
   (train sgd-learner gisette-train)
   (test sgd-learner gisette-test))
 
 (loop for C in '(0d0 0.00001d0 0.0001d0 0.001d0 0.01d0 0.1d0 1d0) do
-  (defparameter sgd-learner (clol::make-sgd gisette-dim C 0.01d0))
+  (defparameter sgd-learner (clol::make-lr+sgd gisette-dim C 0.01d0))
   (print (clol::sgd-C sgd-learner))
   (loop repeat 20 do
     (train sgd-learner gisette-train)
     (test  sgd-learner gisette-test)))
 
 ; α = 0.001, β1 = 0.9, β2 = 0.999 and ε = 10^-8
-(defparameter adam-learner (make-adam gisette-dim 0.000001d0 0.001d0 1.d-8 0.9d0 0.99d0))
+(defparameter adam-learner (make-lr+adam gisette-dim 0.000001d0 0.001d0 1.d-8 0.9d0 0.99d0))
 (loop repeat 20 do
   (train adam-learner gisette-train)
   (test adam-learner gisette-test))
