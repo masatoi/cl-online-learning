@@ -30,7 +30,7 @@
 (train scw-learner a1a-train)
 (test scw-learner a1a-test)
 
-(defparameter sgd-learner (make-sgd a1a-dim 0.00001d0 0.01d0))
+(defparameter sgd-learner (make-lr+sgd a1a-dim 0.00001d0 0.01d0))
 (train sgd-learner a1a-train)
 (test sgd-learner a1a-test)
 
@@ -42,20 +42,13 @@
     (test  sgd-learner a1a-test)))
 
 ; α = 0.001, β1 = 0.9, β2 = 0.999 and ε = 10^-8
-(defparameter adam-learner (make-adam a1a-dim 0.000001d0 0.001d0 1.d-8 0.9d0 0.99d0))
-(adam-update adam-learner (cdar a1a-train) (caar a1a-train))
-
-(ql:quickload :clgplot)
-
-(clgp:plot (reverse clol::*dbg*))
-
-(loop repeat 10 do
-  (adam-train adam-learner a1a-train)
-  (adam-test adam-learner a1a-test))
+(defparameter adam-learner (make-lr+adam a1a-dim 0.000001d0 0.001d0 1.d-8 0.9d0 0.99d0))
+(train adam-learner a1a-train)
+(test adam-learner a1a-test)
 
 (loop for C in '(0d0 0.00001d0 0.0001d0 0.001d0 0.01d0 0.1d0 1d0) do
-  (defparameter adam-learner (make-adam a1a-dim C 0.001d0 1.d-8 0.9d0 0.99d0))
-  (print (clol::adam-C adam-learner))
+  (defparameter adam-learner (make-lr+adam a1a-dim C 0.001d0 1.d-8 0.9d0 0.99d0))
+  (format t "lr+adam-C: ~A~%" (clol::lr+adam-C adam-learner))
   (loop repeat 20 do
     (train adam-learner a1a-train)
     (test  adam-learner a1a-test)))
@@ -76,6 +69,17 @@
 (defparameter sparse-scw-learner (make-sparse-scw a1a-dim 0.9d0 0.1d0))
 (train sparse-scw-learner sparse-a1a-train)
 (sparse-scw-test sparse-scw-learner sparse-a1a-test)
+
+(defparameter sparse-sgd-learner (make-sparse-lr+sgd a1a-dim 0.00001d0 0.01d0))
+(train sparse-sgd-learner sparse-a1a-train)
+(test sparse-sgd-learner sparse-a1a-test)
+
+(defparameter sparse-adam-learner (make-sparse-lr+adam a1a-dim 0.000001d0 0.001d0 1.d-8 0.9d0 0.99d0))
+(train sparse-adam-learner sparse-a1a-train)
+(test sparse-adam-learner sparse-a1a-test)
+
+;;; sparse a1a
+
 
 ;;; More bigger data
 
@@ -117,12 +121,11 @@
 
 ;; use f! and declare in -UPDATE function
 ;; Evaluation took:
-;;   4.162 seconds of real time
-;;   4.147597 seconds of total run time (4.147597 user, 0.000000 system)
-;;   [ Run times consist of 0.005 seconds GC time, and 4.143 seconds non-GC time. ]
-;;   99.66% CPU
-;;   14,118,857,416 processor cycles
-;;   111,640,496 bytes consed
+;;   4.037 seconds of real time
+;;   4.038199 seconds of total run time (4.027196 user, 0.011003 system)
+;;   100.02% CPU
+;;   13,694,338,298 processor cycles
+;;   111,580,640 bytes consed
 
 ;;; CLOS version
 ;; Evaluation took:
@@ -330,9 +333,77 @@
 ;;   8,564,202,770 processor cycles
 ;;   329,047,584 bytes consed
 
+(defparameter lr+sgd-learner (make-lr+sgd a9a-dim 0.001d0 0.001d0))
+(time (loop repeat 1000 do (train lr+sgd-learner a9a-train)))
+(test lr+sgd-learner a9a-test)
+
+;; Evaluation took:
+;;   15.391 seconds of real time
+;;   15.395063 seconds of total run time (15.391215 user, 0.003848 system)
+;;   [ Run times consist of 0.064 seconds GC time, and 15.332 seconds non-GC time. ]
+;;   100.03% CPU
+;;   52,207,640,106 processor cycles
+;;   3,646,916,864 bytes consed
+
+;; use logistic-regression-gradient!
+;; Evaluation took:
+;;   14.888 seconds of real time
+;;   14.891887 seconds of total run time (14.883481 user, 0.008406 system)
+;;   [ Run times consist of 0.026 seconds GC time, and 14.866 seconds non-GC time. ]
+;;   100.03% CPU
+;;   50,502,032,097 processor cycles
+;;   1,562,999,200 bytes consed
+  
+;; Accuracy: 85.129906%, Correct: 13860, Total: 16281
+
+(defparameter lr+sgd-learner.sp (make-sparse-lr+sgd a9a-dim 0.001d0 0.001d0))
+(time (loop repeat 1000 do (train lr+sgd-learner.sp a9a-train.sp)))
+(test lr+sgd-learner.sp a9a-test.sp)
+
+;; Evaluation took:
+;;   8.391 seconds of real time
+;;   8.391694 seconds of total run time (8.378601 user, 0.013093 system)
+;;   [ Run times consist of 0.026 seconds GC time, and 8.366 seconds non-GC time. ]
+;;   100.01% CPU
+;;   28,462,239,673 processor cycles
+;;   1,563,021,344 bytes consed
+
+;; Accuracy: 85.129906%, Correct: 13860, Total: 16281
+
 (defparameter adam-learner (make-adam a9a-dim 0.001d0 0.001d0 1.d-8 0.9d0 0.99d0))
 (time (loop repeat 1000 do (train adam-learner a9a-train)))
 (test  adam-learner a9a-test)
+
+;; Evaluation took:
+;;   67.682 seconds of real time
+;;   67.706814 seconds of total run time (67.671638 user, 0.035176 system)
+;;   [ Run times consist of 0.197 seconds GC time, and 67.510 seconds non-GC time. ]
+;;   100.04% CPU
+;;   229,585,538,903 processor cycles
+;;   15,108,377,152 bytes consed
+
+;; Accuracy: 84.957924%, Correct: 13832, Total: 16281
+
+;; Evaluation took:
+;;   62.894 seconds of real time
+;;   63.634589 seconds of total run time (63.634589 user, 0.000000 system)
+;;   101.18% CPU
+;;   213,348,017,096 processor cycles
+;;   6,772,740,016 bytes consed
+
+(defparameter adam-learner.sp (make-sparse-lr+adam a9a-dim 0.001d0 0.001d0 1.d-8 0.9d0 0.99d0))
+(time (loop repeat 1000 do (train adam-learner.sp a9a-train.sp)))
+(test  adam-learner.sp a9a-test.sp)
+
+;; Evaluation took:
+;;   57.980 seconds of real time
+;;   58.001587 seconds of total run time (57.951849 user, 0.049738 system)
+;;   [ Run times consist of 0.116 seconds GC time, and 57.886 seconds non-GC time. ]
+;;   100.04% CPU
+;;   196,675,200,604 processor cycles
+;;   6,772,815,744 bytes consed
+
+;; Accuracy: 84.957924%, Correct: 13832, Total: 16281
 
 ;;; AROW++
 ;; ~/datasets $ arow_learn -i 1000 a9a a9a.arow.model
@@ -393,15 +464,26 @@
   (train mnist-arow mnist-train)
   (test mnist-arow mnist-test)))
 
+(defparameter mnist-scw (make-one-vs-one mnist-dim 10 'scw 0.9d0 0.1d0))
+(time (loop repeat 10 do
+  (train mnist-scw mnist-train)
+  (test mnist-scw mnist-test)))
+
 ;; 10 sec Accuracy: 91.78%, Correct: 9178, Total: 10000
 (defparameter mnist-perceptron (make-one-vs-one mnist-dim 10 'perceptron))
 (time (loop repeat 10 do
   (train mnist-perceptron mnist-train)
   (test mnist-perceptron mnist-test)))
 
-(require :sb-sprof)
+(defparameter mnist-sgd (make-one-vs-one mnist-dim 10 'lr+sgd 0.00001d0 0.01d0))
+(time (loop repeat 10 do
+  (train mnist-sgd mnist-train)
+  (test mnist-sgd mnist-test)))
 
-(defparameter mnist-lr-sgd (make-one-vs-one mnist-dim 10 'sgd 0.00001d0 0.01d0))
+(defparameter mnist-adam (make-one-vs-one mnist-dim 10 'lr+adam 0.001d0 0.001d0 1.d-8 0.9d0 0.99d0))
+(time (loop repeat 10 do
+  (train mnist-adam mnist-train)
+  (test mnist-adam mnist-test)))
 
 (require :sb-sprof)
 
