@@ -29,7 +29,7 @@
 		 (let ((read-data (read-line f nil nil)))
 		   (if (null read-data)
 		     (nreverse data-list)
-		     (let* ((dv (make-array data-dimension :element-type element-type))
+		     (let* ((dv (make-array data-dimension :element-type element-type :initial-element 0d0))
 			    (d (ppcre:split "\\s+" read-data))
 			    (index-num-alist
 			     (mapcar (lambda (index-num-pair-str)
@@ -51,7 +51,7 @@
 		 (let ((read-data (read-line f nil nil)))
 		   (if (null read-data)
 		     (nreverse data-list)
-		     (let* ((dv (make-array data-dimension :element-type element-type))
+		     (let* ((dv (make-array data-dimension :element-type element-type :initial-element 0d0))
 			    (d (ppcre:split "\\s+" read-data))
 			    (index-num-alist
 			     (mapcar (lambda (index-num-pair-str)
