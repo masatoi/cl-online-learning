@@ -341,7 +341,7 @@
 ;;; Logistic regression (L2 regularization)
 
 (defmacro sigmoid (x)
-  `(/ 1d0 (+ 1d0 (exp (- ,x)))))
+  `(/ 1d0 (+ 1d0 (exp (* -1d0 ,x)))))
 
 ;; (defun logistic-regression-gradient (training-label input-vector weight-vector C tmp-vec result)
 ;;   (v*n input-vector
@@ -385,13 +385,13 @@
     (declare (type (double-float 0d0) sigmoid-val))
     ;; set gradient-vector to result
     (v*n input-vector
-         (* (- 1d0 sigmoid-val) (- training-label))
+         (* (- 1d0 sigmoid-val) (* -1d0 training-label))
          tmp-vec)
     (v*n weight-vector (* 2d0 C) result)
     (v+ tmp-vec result result)
     ;; return g0
     (setr (+ (* (- 1d0 sigmoid-val)
-                (- training-label))
+                (* -1d0 training-label))
              (* 2d0 C bias)))
     (values)))
 
@@ -742,13 +742,13 @@
     (declare (type (double-float 0d0) sigmoid-val))
     ;; set gradient-vector to result
     (sps-v*n input-vector
-             (* (- 1d0 sigmoid-val) (- training-label))
+             (* (- 1d0 sigmoid-val) (* -1d0 training-label))
              tmp-vec)
     (v*n weight-vector (* 2d0 C) result)
     (dps-v+ result tmp-vec (sparse-vector-index-vector input-vector) result)
     ;; return g0
     (setr (+ (* (- 1d0 sigmoid-val)
-                (- training-label))
+                (* -1d0 training-label))
              (* 2d0 C bias)))
     (values)))
 
