@@ -8,6 +8,7 @@ A collection of online learning algorithms for Linear classification written in 
 - Perceptron
 - AROW
 - SCW-I (Soft Confidence Weighted)
+- Logistic Regression with SGD or ADAM optimizer
 
 *** Multiclass classifier
 - one-vs-rest ( K binary classifier required )
