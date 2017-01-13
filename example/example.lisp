@@ -15,8 +15,8 @@
 ;;; Binary classification, Dence data
 
 (defparameter a1a-dim 123)
-(defparameter a1a-train (read-libsvm-data "/home/wiz/datasets/a1a" a1a-dim))
-(defparameter a1a-test (read-libsvm-data "/home/wiz/datasets/a1a.t" a1a-dim))
+(defparameter a1a-train (read-data "/home/wiz/datasets/a1a" a1a-dim))
+(defparameter a1a-test (read-data "/home/wiz/datasets/a1a.t" a1a-dim))
 
 (defparameter perceptron-learner (make-perceptron a1a-dim))
 (train perceptron-learner a1a-train)
@@ -55,8 +55,8 @@
 
 ;;; Binary classification, Sparse data
 
-(defparameter sparse-a1a-train (read-libsvm-data-sparse "/home/wiz/tmp/a1a"))
-(defparameter sparse-a1a-test (read-libsvm-data-sparse "/home/wiz/tmp/a1a.t"))
+(defparameter sparse-a1a-train (read-data "/home/wiz/tmp/a1a" a1a-dim :sparse-p t))
+(defparameter sparse-a1a-test (read-data "/home/wiz/tmp/a1a.t" a1a-dim :sparse-p t))
 
 (defparameter sparse-perceptron-learner (make-sparse-perceptron a1a-dim))
 (train sparse-perceptron-learner sparse-a1a-train)
@@ -85,8 +85,8 @@
 
 (defparameter a9a-dim 123)
 
-(defparameter a9a-train (read-libsvm-data "/home/wiz/tmp/a9a" a9a-dim))
-(defparameter a9a-test (read-libsvm-data "/home/wiz/tmp/a9a.t" a9a-dim))
+(defparameter a9a-train (read-data "/home/wiz/datasets/a9a" a9a-dim))
+(defparameter a9a-test (read-data "/home/wiz/datasets/a9a.t" a9a-dim))
 
 (defparameter perceptron-learner (make-perceptron a9a-dim))
 (time (loop repeat 1000 do (train perceptron-learner a9a-train)))
@@ -136,8 +136,8 @@
 ;;   25,939,324,287 processor cycles
 ;;   1,674,404,304 bytes consed
 
-(defparameter a9a-train.sp (read-libsvm-data-sparse "/home/wiz/tmp/a9a"))
-(defparameter a9a-test.sp  (read-libsvm-data-sparse "/home/wiz/tmp/a9a.t"))
+(defparameter a9a-train.sp (read-data "/home/wiz/datasets/a9a" a9a-dim :sparse-p t))
+(defparameter a9a-test.sp (read-data "/home/wiz/datasets/a9a.t" a9a-dim :sparse-p t))
 
 (defparameter perceptron-learner.sp (make-sparse-perceptron a9a-dim))
 
@@ -426,11 +426,11 @@
 
 (defparameter iris
   (shuffle-vector
-   (coerce (read-libsvm-data-multiclass "/home/wiz/tmp/iris.scale" iris-dim)
+   (coerce (read-data "/home/wiz/tmp/iris.scale" iris-dim :multiclass-p t)
 	   'simple-vector)))
 
 (defparameter iris
-  (read-libsvm-data-multiclass "/home/wiz/tmp/iris.scale" iris-dim))
+  (read-data "/home/wiz/tmp/iris.scale" iris-dim :multiclass-p t))
 
 (defparameter iris-train (subseq iris 0 100))
 (defparameter iris-test (subseq iris 100))
@@ -451,8 +451,8 @@
 ;;;;; MNIST ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defparameter mnist-dim 780)
-(defparameter mnist-train (read-libsvm-data-multiclass "/home/wiz/tmp/mnist.scale" mnist-dim))
-(defparameter mnist-test  (read-libsvm-data-multiclass "/home/wiz/tmp/mnist.scale.t" mnist-dim))
+(defparameter mnist-train (read-data "/home/wiz/tmp/mnist.scale" mnist-dim :multiclass-p t))
+(defparameter mnist-test  (read-data "/home/wiz/tmp/mnist.scale.t" mnist-dim :multiclass-p t))
 
 ;; Add 1 to labels because the labels of this dataset begin from 0
 (dolist (datum mnist-train) (incf (car datum)))
@@ -581,16 +581,14 @@
 
 ;;; Sparse
 
-(defparameter mnist-train.sp (read-libsvm-data-sparse-multiclass "/home/wiz/tmp/mnist.scale"))
-(defparameter mnist-test.sp  (read-libsvm-data-sparse-multiclass "/home/wiz/tmp/mnist.scale.t"))
+(defparameter mnist-train.sp
+  (read-data "/home/wiz/tmp/mnist.scale" mnist-dim :sparse-p t :multiclass-p t))
+(defparameter mnist-test.sp
+  (read-data "/home/wiz/tmp/mnist.scale.t" mnist-dim :sparse-p t :multiclass-p t))
 
 ;; Add 1 to labels because the labels of this dataset begin from 0
 (dolist (datum mnist-train.sp) (incf (car datum)))
 (dolist (datum mnist-test.sp)  (incf (car datum)))
-
-(ql:quickload :clgplot)
-(clgp:plot-histogram (mapcar (lambda (d) (clol.vector::sparse-vector-length (cdr d)))
-                             mnist-train.sp) 20)
 
 (defparameter mnist-arow.sp (make-one-vs-one mnist-dim 10 'sparse-arow 10d0))
 (time (loop repeat 8 do (train mnist-arow.sp mnist-train.sp)))
@@ -613,8 +611,10 @@
 ;;;;; news20 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defparameter news20-dim 62060)
-(defparameter news20-train (read-libsvm-data-sparse-multiclass "/home/wiz/datasets/news20.scale"))
-(defparameter news20-test (read-libsvm-data-sparse-multiclass "/home/wiz/datasets/news20.t.scale"))
+(defparameter news20-train
+  (read-data "/home/wiz/datasets/news20.scale" news20-dim :sparse-p t :multiclass-p t))
+(defparameter news20-test
+  (read-data "/home/wiz/datasets/news20.t.scale" news20-dim :sparse-p t :multiclass-p t))
 
 (defparameter news20-arow (make-one-vs-one news20-dim 20 'sparse-arow 1d0))
 
@@ -634,14 +634,9 @@
 
 ;; Accuracy: 86.90208%, Correct: 3470, Total: 3993
 
-(time )
-
 (loop repeat 10 do
   (train news20-arow-1vr news20-train)
   (test news20-arow-1vr news20-test))
-
-(time (loop repeat 10 do
-  (train news20-arow-1vr news20-train)))
 
 ;;; Almost data dimension < 500
 ;; (ql:quickload :clgplot)
@@ -653,17 +648,14 @@
 
 ;;;;; news20.binary ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defparameter news20.binary-dim 1355191)
-(defparameter news20.binary (read-libsvm-data-sparse "/home/wiz/datasets/news20.binary"))
+(defparameter news20.binary
+  (read-data "/home/wiz/datasets/news20.binary" news20.binary-dim :sparse-p t))
 (defparameter news20.binary.arow (make-sparse-arow news20.binary-dim 10d0))
 (time (loop repeat 20 do (train news20.binary.arow news20.binary)))
 (test news20.binary.arow news20.binary)
 
-(defparameter news20.binary.lr+sgd (make-sparse-sgd news20.binary-dim 0.00001d0 0.01d0))
+(defparameter news20.binary.lr+sgd (make-sparse-lr+sgd news20.binary-dim 0.00001d0 0.01d0))
 (time (loop repeat 20 do (train news20.binary.lr+sgd news20.binary)))
-(test news20.binary.arow news20.binary)
-
-(defparameter news20.binary (read-libsvm-data-sparse "/home/wiz/datasets/news20.binary"))
-(defparameter news20.binary (read-libsvm-data-sparse "/home/wiz/datasets/news20.binary"))
 
 (defparameter news20.binary-train (subseq news20.binary 0 15000))
 (defparameter news20.binary-test (subseq news20.binary 15000 19996))
@@ -726,13 +718,13 @@
 ;; of features: 8
 
 (defparameter cod-rna-dim 8)
-(defparameter cod-rna (read-libsvm-data "/home/wiz/datasets/cod-rna" cod-rna-dim))
-(defparameter cod-rna.t (read-libsvm-data "/home/wiz/datasets/cod-rna.t" cod-rna-dim))
+(defparameter cod-rna (read-data "/home/wiz/datasets/cod-rna" cod-rna-dim))
+(defparameter cod-rna.t (read-data "/home/wiz/datasets/cod-rna.t" cod-rna-dim))
 
 ;; it seem require scaling
 
-(defparameter cod-rna.scale (read-libsvm-data "/home/wiz/datasets/cod-rna.scale" cod-rna-dim))
-(defparameter cod-rna.t.scale (read-libsvm-data "/home/wiz/datasets/cod-rna.t.scale" cod-rna-dim))
+(defparameter cod-rna.scale (read-data "/home/wiz/datasets/cod-rna.scale" cod-rna-dim))
+(defparameter cod-rna.t.scale (read-data "/home/wiz/datasets/cod-rna.t.scale" cod-rna-dim))
 
 (defparameter cod-rna-arow (make-arow cod-rna-dim 10d0))
 (time (loop repeat 20 do (train cod-rna-arow cod-rna)))
@@ -781,13 +773,14 @@
 ;; Done!
 ;; Time: 0.6416 sec.
 
-(defparameter cod-rna.sp (read-libsvm-data-sparse "/home/wiz/datasets/cod-rna"))
-(defparameter cod-rna.t.sp (read-libsvm-data-sparse "/home/wiz/datasets/cod-rna.t"))
+(defparameter cod-rna.sp (read-data "/home/wiz/datasets/cod-rna" cod-rna-dim :sparse-p t))
+(defparameter cod-rna.t.sp (read-data "/home/wiz/datasets/cod-rna.t" cod-rna-dim :sparse-p t))
 
 ;; it seem require scaling => use libsvm scaling
 
 (defparameter cod-rna-arow.sp (make-sparse-arow cod-rna-dim 10d0))
-(time (loop repeat 100 do (train cod-rna-arow.sp cod-rna.sp)))
+(time (loop repeat 20 do (train cod-rna-arow.sp cod-rna.sp)))
+(test cod-rna-arow.sp cod-rna.t.sp)
 
 ;; Evaluation took:
 ;;   1.170 seconds of real time
@@ -800,8 +793,8 @@
 ;;; gisette
 
 (defparameter gisette-dim 5000)
-(defparameter gisette-train (read-libsvm-data "/home/wiz/datasets/gisette_scale" gisette-dim))
-(defparameter gisette-test (read-libsvm-data "/home/wiz/datasets/gisette_scale.t" gisette-dim))
+(defparameter gisette-train (read-data "/home/wiz/datasets/gisette_scale" gisette-dim))
+(defparameter gisette-test (read-data "/home/wiz/datasets/gisette_scale.t" gisette-dim))
 
 (defparameter perceptron-learner (make-perceptron gisette-dim))
 (loop repeat 20 do

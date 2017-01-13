@@ -29,10 +29,10 @@
 (format t ";;; Read libsvm dataset~%")
 (is (progn
       (setf a1a
-	    (read-libsvm-data (merge-pathnames
-			       #P"t/dataset/a1a"
-			       (asdf:system-source-directory :cl-online-learning-test))
-			      a1a-dim))
+	    (read-data (merge-pathnames
+                        #P"t/dataset/a1a"
+                        (asdf:system-source-directory :cl-online-learning-test))
+                       a1a-dim))
       (car a1a))
     '(-1.0d0
       . #(0.0d0 0.0d0 1.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 1.0d0 0.0d0
@@ -313,10 +313,10 @@
 (format t ";;; Read libsvm dataset (Sparse)~%")
 (is (progn
       (setf a1a.sp
-	    (read-libsvm-data-sparse
-             (merge-pathnames
-              #P"t/dataset/a1a"
-              (asdf:system-source-directory :cl-online-learning-test))))
+	    (read-data (merge-pathnames
+                        #P"t/dataset/a1a"
+                        (asdf:system-source-directory :cl-online-learning-test))
+                       a1a-dim :sparse-p t))
       (list (caar a1a.sp)
             (sparse-vector-index-vector (cdar a1a.sp))
             (sparse-vector-value-vector (cdar a1a.sp))))
@@ -590,10 +590,9 @@
 (defparameter iris-dim 4)
 (is (progn
       (setf iris
-	    (read-libsvm-data-multiclass
-             (merge-pathnames #P"t/dataset/iris.scale"
-                              (asdf:system-source-directory :cl-online-learning-test))
-             iris-dim))
+	    (read-data (merge-pathnames #P"t/dataset/iris.scale"
+                                        (asdf:system-source-directory :cl-online-learning-test))
+                       iris-dim :multiclass-p t))
       (car iris))
     '(0 . #(-0.5555559992790222d0 0.25d0 -0.8644070029258728d0 -0.9166669845581055d0))
     :test #'equalp)
@@ -824,9 +823,9 @@
 (defvar iris.sp)
 (is (progn
       (setf iris.sp
-	    (read-libsvm-data-sparse-multiclass
-             (merge-pathnames #P"t/dataset/iris.scale"
-                              (asdf:system-source-directory :cl-online-learning-test))))
+	    (read-data (merge-pathnames #P"t/dataset/iris.scale"
+                                        (asdf:system-source-directory :cl-online-learning-test))
+                       iris-dim :sparse-p t :multiclass-p t))
       (sparse-vector-value-vector (cdar iris.sp)))
     #(-0.5555559992790222d0 0.25d0 -0.8644070029258728d0 -0.9166669845581055d0)
     :test #'equalp)
