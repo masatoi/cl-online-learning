@@ -6,9 +6,9 @@ A collection of online learning algorithms for Linear classification written in 
 
 *** Binary classifier
 - Perceptron
-- AROW
-- SCW-I (Soft Confidence Weighted)
-- Logistic Regression with SGD or ADAM optimizer
+- AROW (Crammer, Koby, Alex Kulesza, and Mark Dredze. "Adaptive regularization of weight vectors." Advances in neural information processing systems. 2009.)
+- SCW-I (Soft Confidence Weighted) (Wang, Jialei, Peilin Zhao, and Steven C. Hoi. "Exact Soft Confidence-Weighted Learning." Proceedings of the 29th International Conference on Machine Learning (ICML-12). 2012.)
+- Logistic Regression with SGD or ADAM optimizer (Kingma, Diederik, and Jimmy Ba. "Adam: A method for stochastic optimization." ICLR 2015)
 
 *** Multiclass classifier
 - one-vs-rest ( K binary classifier required )
