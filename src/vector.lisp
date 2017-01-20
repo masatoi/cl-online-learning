@@ -10,7 +10,7 @@
    :sparse-vector-length :sparse-vector-index-vector :sparse-vector-value-vector
    :make-sparse-vector :make-empty-sparse-vector
    :s-v*n :sps-v*n
-   :ds-v+ :ds-v- :ds-v* :ds-v/ :ds-dot :ds-dot!
+   :ds-v+ :ds-v- :ds-v* :ds2s-v* :ds-v/ :ds-dot :ds-dot!
    :dps-v+ :dps-v- :ps-v*n :dps-v*))
 
 (in-package :cl-online-learning.vector)
@@ -166,6 +166,18 @@
             (* (aref dence-x dence-index)
                (aref (sparse-vector-value-vector sparse-y) i)))))
   result)
+
+(defun ds2s-v* (dence-x sparse-y sparse-result)
+  (declare (type (simple-array double-float) dence-x)
+           (type sparse-vector sparse-y sparse-result)
+           (optimize (speed 3) (safety 0)))
+  (dosvec sparse-y i
+    (let ((dence-index (aref (sparse-vector-index-vector sparse-y) i)))
+      (declare (type fixnum dence-index))
+      (setf (aref (sparse-vector-value-vector sparse-result) i)
+            (* (aref dence-x dence-index)
+               (aref (sparse-vector-value-vector sparse-y) i)))))
+  sparse-result)
 
 (defun ds-v/ (dence-x sparse-y result)
   (declare (type (simple-array double-float) dence-x result)
