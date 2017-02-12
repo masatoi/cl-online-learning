@@ -1,5 +1,7 @@
 * Cl-Online-Learning
 
+[![Quicklisp](http://quickdocs.org/badge/cl-online-learning.svg)](http://quickdocs.org/cl-online-learning/)
+
 A collection of online learning algorithms for Linear classification written in pure Common Lisp.
 
 ** Implemented algorithms
@@ -15,6 +17,12 @@ A collection of online learning algorithms for Linear classification written in 
 - one-vs-one ( K*(K-1)/2 binary classifier required )
 
 ** Installation
+cl-online-learning is available from Quicklisp.
+#+BEGIN_SRC 
+(ql:quickload :cl-online-learning)
+#+END_SRC
+
+When install from github repository,
 #+BEGIN_SRC 
 cd ~/quicklisp/local-projects/
 git clone https://github.com/masatoi/cl-online-learning.git
