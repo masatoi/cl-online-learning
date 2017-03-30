@@ -464,6 +464,11 @@
   (train mnist-arow mnist-train)
   (test mnist-arow mnist-test)))
 
+(defparameter mnist-arow (make-one-vs-rest mnist-dim 10 'arow 10d0))
+(time (loop repeat 10 do
+  (train mnist-arow mnist-train)
+  (test mnist-arow mnist-test)))
+
 (defparameter mnist-scw (make-one-vs-one mnist-dim 10 'scw 0.9d0 0.1d0))
 (time (loop repeat 10 do
   (train mnist-scw mnist-train)
@@ -844,3 +849,84 @@
  :title-list '("perceptron" "lr+sgd" "lr+adam" "arow" "scw")
  :x-label "epochs"
  :y-label "accuracy for gisette")
+
+;;; covtype.binary
+
+(defparameter covtype-dim 54)
+(defparameter covtype (read-data "/home/wiz/datasets/covtype.libsvm.binary.scale" covtype-dim))
+(defparameter covtype-data
+  (mapcar (lambda (datum)
+            (if (= (car datum) 1.0d0)
+                (cons -1d0 (cdr datum))
+                (cons 1d0 (cdr datum))))
+          covtype))
+
+(defparameter arow-learner (make-arow covtype-dim 10d0))
+(loop repeat 100 do
+  (train arow-learner covtype-data)
+  (test arow-learner covtype-data))
+
+(defparameter scw-learner (make-scw covtype-dim 0.99d0 0.01d0))
+(loop repeat 100 do
+  (train scw-learner covtype-data)
+  (test scw-learner covtype-data))
+
+(defparameter lr-adam-learner (make-lr+adam covtype-dim 0.000001d0 0.001d0 1.d-8 0.9d0 0.99d0))
+(loop repeat 10 do
+  (train lr-adam-learner covtype-data)
+  (test lr-adam-learner covtype-data))
+
+;;; covtype
+
+(defparameter covtype-dim 54)
+(defparameter covtype-n-class 7)
+(defparameter covtype-train (clol.utils:read-data "/home/wiz/datasets/covtype.scale" covtype-dim
+                                                  :multiclass-p t))
+(defparameter covtype-test (clol.utils:read-data "/home/wiz/datasets/covtype.scale.t" covtype-dim
+                                                :multiclass-p t))
+
+
+(defparameter arow-learner (make-one-vs-one covtype-dim covtype-n-class 'arow 10d0))
+(loop repeat 5 do
+  (train arow-learner covtype-train)
+  (test arow-learner covtype-test))
+
+(defparameter scw-learner (make-one-vs-one covtype-dim covtype-n-class 'scw 0.99d0 0.01d0))
+(loop repeat 5 do
+  (train scw-learner covtype-train)
+  (test scw-learner covtype-test))
+
+(clrf::write-to-r-format-from-clol-dataset covtype-train "/home/wiz/datasets/covtype-for-r")
+
+;;; mushrooms
+
+(defparameter mushrooms-dim 112)
+
+(defparameter mushrooms-train (clol.utils:read-data "/home/wiz/datasets/mushrooms-train" mushrooms-dim))
+(defparameter mushrooms-test (clol.utils:read-data "/home/wiz/datasets/mushrooms-test" mushrooms-dim))
+
+(defparameter arow-learner (make-arow mushrooms-dim 10d0))
+(loop repeat 10 do
+  (train arow-learner mushrooms-train)
+  (test arow-learner mushrooms-test))
+
+;; Accuracy: 93.36158%, Correct: 1983, Total: 2124
+
+(defparameter mushrooms-mul-train
+  (let ((target (mapcar (lambda (datum)
+                          (if (> (car datum) 0d0) 1 0))
+                        mushrooms-train))
+        (input (mapcar #'cdr mushrooms-train)))
+    (mapcar #'cons target input)))
+
+(defparameter mushrooms-mul-test
+  (let ((target (mapcar (lambda (datum)
+                          (if (> (car datum) 0d0) 1 0))
+                        mushrooms-test))
+        (input (mapcar #'cdr mushrooms-test)))
+    (mapcar #'cons target input)))
+
+(defparameter arow-mul-learner (make-one-vs-rest mushrooms-dim 2 'arow 10d0))
+(loop repeat 10 do
+  (train arow-mul-learner mushrooms-mul-train)
+  (test arow-mul-learner mushrooms-mul-test))

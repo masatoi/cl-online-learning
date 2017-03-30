@@ -5,10 +5,10 @@
   (:use :cl)
   (:nicknames :clol.vector)
   (:export
-   :make-dvec :v+ :v- :v*n :v+n :v* :v/ :v-sqrt
+   :make-dvec :dovec :v+ :v- :v*n :v+n :v* :v/ :v-sqrt
    :dot :dot!
    :sparse-vector-length :sparse-vector-index-vector :sparse-vector-value-vector
-   :make-sparse-vector :make-empty-sparse-vector
+   :make-sparse-vector :make-empty-sparse-vector :dosvec
    :s-v*n :sps-v*n
    :ds-v+ :ds-v- :ds-v* :ds2s-v* :ds-v/ :ds-dot :ds-dot!
    :dps-v+ :dps-v- :ps-v*n :dps-v*))
