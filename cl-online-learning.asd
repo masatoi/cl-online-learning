@@ -15,7 +15,8 @@
 			:components
 			((:file "vector")
                          (:file "utils" :depends-on ("vector"))
-                         (:file "cl-online-learning" :depends-on ("vector")))
+                         (:file "cl-online-learning" :depends-on ("vector"))
+                         (:file "rls" :depends-on ("vector" "cl-online-learning")))
                         ))
   :description "Online Machine Learning for Common Lisp"
   :long-description
