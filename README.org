@@ -34,16 +34,35 @@ ros install masatoi/cl-online-learning
 #+END_SRC
 ** Usage
 *** Prepare dataset
-A data point is a pair of a class label (+1 or -1) and a input vector.
+A data point is a pair of a class label (+1 or -1) and a input vector. Both of them have to be declared as double-float.
 
 And dataset is represented as a sequence of data points.
 READ-DATA function is available to make a dataset from a sparse format used in LIBSVM (http://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/). This function requires the number of features of that dataset.
 #+BEGIN_SRC lisp
+;; Number of features
 (defparameter a1a-dim 123)
+
+;; Read dataset from file
 (defparameter a1a
   (clol.utils:read-data
    (merge-pathnames #P"t/dataset/a1a" (asdf:system-source-directory :cl-online-learning))
    a1a-dim))
+
+;; A data point
+(car a1a)
+
+; (-1.0d0
+;  . #(0.0d0 0.0d0 1.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 1.0d0 0.0d0
+;      0.0d0 1.0d0 0.0d0 0.0d0 0.0d0 0.0d0 1.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0
+;      0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0
+;      0.0d0 0.0d0 1.0d0 0.0d0 0.0d0 1.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0
+;      0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 1.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0
+;      0.0d0 0.0d0 0.0d0 1.0d0 0.0d0 0.0d0 1.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0
+;      1.0d0 0.0d0 1.0d0 1.0d0 0.0d0 0.0d0 0.0d0 1.0d0 0.0d0 0.0d0 1.0d0 0.0d0
+;      0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0
+;      0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0
+;      0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0
+;      0.0d0 0.0d0 0.0d0))
 #+END_SRC
 
 *** Define learner
@@ -122,7 +141,7 @@ For example, news20.binary data has too high dimensional features to handle with
 ;;   5,176,917,149 processor cycles
 ;;   11,436,032 bytes consed
 (clol:test news20.binary.arow news20.binary)
-;; Accuracy: 99.74495%, Correct: 19945, Total: 19996
+; Accuracy: 99.74495%, Correct: 19945, Total: 19996
 #+END_SRC
 
 In a similar way, the sparse version learners are also available in multiclass classification.
@@ -134,7 +153,7 @@ In a similar way, the sparse version learners are also available in multiclass c
 (defparameter news20-arow (clol:make-one-vs-rest news20-dim 20 'sparse-arow 10d0))
 (loop repeat 12 do (clol:train news20-arow news20-train))
 (clol:test news20-arow news20-test)
-;; Accuracy: 86.90208%, Correct: 3470, Total: 3993
+; Accuracy: 86.90208%, Correct: 3470, Total: 3993
 #+END_SRC
 
 # *** Benchimark

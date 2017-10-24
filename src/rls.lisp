@@ -71,7 +71,7 @@
   (check-type input-dimension integer)
   (assert (> input-dimension 0))
   (check-type gamma double-float)
-  (assert (< 0d0 gamma 1d0))
+  (assert (<= 0.98d0 gamma 1d0))
   (%make-rls :input-dimension input-dimension
              :weight (make-dvec input-dimension 0d0) ; mu
              :bias 0d0                               ; mu0
@@ -138,7 +138,7 @@
   (check-type input-dimension integer)
   (assert (> input-dimension 0))
   (check-type gamma double-float)
-  (assert (< 0d0 gamma 1d0))
+  (assert (<= 0.98d0 gamma 1d0))
   (%make-sparse-rls :input-dimension input-dimension
                      :weight (make-dvec input-dimension 0d0) ; mu
                      :bias 0d0                               ; mu0
