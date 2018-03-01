@@ -6,11 +6,11 @@
 (in-package :cl-online-learning-asd)
 
 (defsystem cl-online-learning
-  :version "0.4"
+  :version "0.41"
   :author "Satoshi Imai"
   :licence "MIT Licence"
   :encoding :utf-8
-  :depends-on (:split-sequence :parse-number)
+  :depends-on (:cl-libsvm-format)
   :components ((:module "src"
 			:components
 			((:file "vector")
