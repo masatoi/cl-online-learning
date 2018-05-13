@@ -53,13 +53,16 @@
       (cons training-label (iter 0 (cdr svmformat-datum))))))
 
 (defun read-data (data-path data-dimension &key multiclass-p sparse-p)
-  (let ((data-list (svmformat:parse-file data-path))
-        (reader (if sparse-p
-                    (lambda (datum)
-                      (read-datum-sparse datum :multiclass-p multiclass-p))
-                    (lambda (datum)
-                      (read-datum datum data-dimension :multiclass-p multiclass-p)))))
-    (mapcar reader data-list)))
+  (multiple-value-bind (data-list dim)
+      (svmformat:parse-file data-path)
+    (let* ((dim (if data-dimension data-dimension dim))
+           (reader (if sparse-p
+                       (lambda (datum)
+                         (read-datum-sparse datum :multiclass-p multiclass-p))
+                       (lambda (datum)
+                         (read-datum datum dim :multiclass-p multiclass-p)))))
+      (values (mapcar reader data-list)
+              dim))))
 
 ;;; Autoscale
 

@@ -3,7 +3,7 @@
 [[http://quickdocs.org/cl-online-learning/][http://quickdocs.org/badge/cl-online-learning.svg]]
 [[https://travis-ci.org/masatoi/cl-online-learning][https://travis-ci.org/masatoi/cl-online-learning.svg?branch=master]]
 
-A collection of online learning algorithms for Linear classification written in pure Common Lisp.
+A collection of machine learning algorithms for online linear classification written in Common Lisp.
 
 ** Implemented algorithms
 
