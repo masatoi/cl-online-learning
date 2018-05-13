@@ -937,7 +937,7 @@
                                      (+ (ds-dot weight input) bias))
                                    (lambda (input weight bias)
                                      (+ (dot weight input) bias))))))
-    (loop for i from 0 to (1- n-class) do
+    (loop for i from 0 below n-class do
       (setf (aref (one-vs-rest-learners-vector mulc) i)
             (apply (function-by-name (catstr "MAKE-" (symbol-name learner-type)))
                    (cons input-dimension learner-params))))
@@ -946,7 +946,7 @@
 (defun one-vs-rest-predict (mulc input)
   (let ((max-f most-negative-double-float)
 	(max-i 0))
-    (loop for i from 0 to (1- (one-vs-rest-n-class mulc)) do
+    (loop for i from 0 below (one-vs-rest-n-class mulc) do
       (let* ((learner (svref (one-vs-rest-learners-vector mulc) i))
 	     (learner-f (funcall (one-vs-rest-learner-activate mulc)
                                  input
@@ -959,7 +959,7 @@
 
 ;; training-label should be integer (0 ... K-1)
 (defun one-vs-rest-update (mulc input training-label)
-  (loop for i from 0 to (1- (one-vs-rest-n-class mulc)) do
+  (loop for i from 0 below (one-vs-rest-n-class mulc) do
     (if (= i training-label)
       (funcall (one-vs-rest-learner-update mulc)
                (svref (one-vs-rest-learners-vector mulc) i) input 1d0)
@@ -996,7 +996,7 @@
                 :learners-vector (make-array n-learner)
                 :learner-update (function-by-name (catstr (symbol-name learner-type) "-UPDATE"))
                 :learner-predict (function-by-name (catstr (symbol-name learner-type) "-PREDICT")))))
-    (loop for i from 0 to (1- n-learner) do
+    (loop for i from 0 below n-learner do
       (setf (aref (one-vs-one-learners-vector mulc) i)
             (apply (function-by-name (catstr "MAKE-" (symbol-name learner-type)))
                    (cons input-dimension learner-params))))
@@ -1014,10 +1014,10 @@
 (defun one-vs-one-predict (mulc input)
   (let ((max-cnt 0)
 	(max-class nil))
-    (loop for k from 0 to (1- (one-vs-one-n-class mulc)) do
+    (loop for k from 0 below (one-vs-one-n-class mulc) do
       (let ((cnt 0))
 	;; negative
-	(loop for i from 0 to (1- k) do
+	(loop for i from 0 below k do
           ;; (format t "k: ~A, Negative, learner-index: ~A~%" k (index-of-learner k i (one-vs-one-n-class mulc)))
 	  (if (< (funcall (one-vs-one-learner-predict mulc)
                           (svref (one-vs-one-learners-vector mulc)
@@ -1040,7 +1040,7 @@
 ;; training-label should be integer (0 ... K-1)
 (defun one-vs-one-update (mulc input training-label)
   ;; negative
-  (loop for i from 0 to (1- training-label) do
+  (loop for i from 0 below training-label do
     ;; (format t "Negative. Index: ~A~%" (index-of-learner training-label i (one-vs-one-n-class mulc))) ;debug
     (funcall (one-vs-one-learner-update mulc)
              (svref (one-vs-one-learners-vector mulc)

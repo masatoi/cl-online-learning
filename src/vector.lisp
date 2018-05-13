@@ -19,7 +19,7 @@
   (make-array input-dimension :element-type 'double-float :initial-element initial-element))
 
 (defmacro dovec (vec var &body body)
-  `(loop for ,var fixnum from 0 to (1- (length ,vec)) do ,@body))
+  `(loop for ,var fixnum from 0 below (length ,vec) do ,@body))
 
 ;;; Dence vector operators
 
@@ -107,7 +107,7 @@
                        :value-vector (make-array sparse-dim :element-type 'double-float)))
 
 (defmacro dosvec (svec var &body body)
-  `(loop for ,var fixnum from 0 to (1- (sparse-vector-length ,svec)) do ,@body))
+  `(loop for ,var fixnum from 0 below (sparse-vector-length ,svec) do ,@body))
 
 (defun s-v*n (sparse-x n result)
   (declare (type sparse-vector sparse-x result)
