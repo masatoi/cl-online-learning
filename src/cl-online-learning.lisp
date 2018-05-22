@@ -21,11 +21,11 @@
    :make-sparse-lr+adam :sparse-lr+adam-update :sparse-lr+adam-train :sparse-lr+adam-predict :sparse-lr+adam-test
    :make-one-vs-rest :one-vs-rest-update :one-vs-rest-train :one-vs-rest-predict :one-vs-rest-test
    :make-one-vs-one :one-vs-one-update :one-vs-one-train :one-vs-one-predict :one-vs-one-test
-
    ;; regression
    :make-rls :rls-update :rls-train :rls-predict :rls-test
    :make-sparse-rls :sparse-rls-update :sparse-rls-train :sparse-rls-predict :sparse-rls-test
-   ))
+   ; save/restore
+   :save :restore))
 
 (in-package :cl-online-learning)
 
@@ -1099,3 +1099,22 @@
           (function-by-name (catstr (symbol-name learner-type) "-UPDATE"))
           (one-vs-one-learner-predict mulc)
           (function-by-name (catstr (symbol-name learner-type) "-PREDICT")))))
+
+;;; Save and restore models
+
+(defun save (learner file-path)
+  (typecase learner
+    (one-vs-rest (one-vs-rest-clear-functions-for-store learner))
+    (one-vs-one (one-vs-one-clear-functions-for-store learner)))
+  (cl-store:store learner file-path)
+  (typecase learner
+      (one-vs-rest (one-vs-rest-restore-functions learner))
+      (one-vs-one (one-vs-one-restore-functions learner)))
+  learner)
+
+(defun restore (file-path)
+  (let ((learner (cl-store:restore file-path)))
+    (typecase learner
+      (one-vs-rest (one-vs-rest-restore-functions learner))
+      (one-vs-one (one-vs-one-restore-functions learner)))
+    learner))
