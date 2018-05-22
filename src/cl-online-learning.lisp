@@ -7,7 +7,7 @@
   (:use :cl :cl-online-learning.vector)
   (:nicknames :clol)
   (:export
-   :train :test
+   :train :test :dim-of
    :make-perceptron :perceptron-update :perceptron-train :perceptron-predict :perceptron-test
    :make-arow :arow-update :arow-train :arow-predict :arow-test
    :make-scw :scw-update :scw-train :scw-predict :scw-test
@@ -132,6 +132,16 @@
   (funcall (intern (catstr (symbol-name (type-of learner)) "-TEST")
                    :cl-online-learning)
            learner test-data))
+
+(defun dim-of (learner)
+  (let ((learner
+          (typecase learner
+            (one-vs-one  (aref (one-vs-one-learners-vector learner) 0))
+            (one-vs-rest (aref (one-vs-rest-learners-vector learner) 0))
+            (t learner))))
+    (length (funcall (intern (catstr (symbol-name (type-of learner)) "-WEIGHT")
+                             :cl-online-learning)
+                     learner))))
 
 ;;; Perceptron
 
@@ -968,6 +978,28 @@
 
 (define-multi-class-learner-train/test-functions one-vs-rest)
 
+;; for store/restore model with cl-store
+(defun one-vs-rest-clear-functions-for-store (mulc)
+  (setf (one-vs-rest-learner-weight   mulc) nil
+        (one-vs-rest-learner-bias     mulc) nil
+        (one-vs-rest-learner-update   mulc) nil
+        (one-vs-rest-learner-activate mulc) nil))
+
+(defun one-vs-rest-restore-functions (mulc)
+  (let ((learner-type (type-of (aref (one-vs-rest-learners-vector mulc) 0))))
+    (setf (one-vs-rest-learner-weight   mulc)
+          (function-by-name (catstr (symbol-name learner-type) "-WEIGHT"))
+          (one-vs-rest-learner-bias     mulc)
+          (function-by-name (catstr (symbol-name learner-type) "-BIAS"))
+          (one-vs-rest-learner-update   mulc)
+          (function-by-name (catstr (symbol-name learner-type) "-UPDATE"))
+          (one-vs-rest-learner-activate mulc)
+          (if (sparse-symbol? learner-type)
+              (lambda (input weight bias)
+                (+ (ds-dot weight input) bias))
+              (lambda (input weight bias)
+                (+ (dot weight input) bias))))))
+
 ;;; one-vs-one
 
 (defstruct (one-vs-one (:constructor  %make-one-vs-one)
@@ -994,7 +1026,7 @@
                 :input-dimension input-dimension
                 :n-class n-class
                 :learners-vector (make-array n-learner)
-                :learner-update (function-by-name (catstr (symbol-name learner-type) "-UPDATE"))
+                :learner-update  (function-by-name (catstr (symbol-name learner-type) "-UPDATE"))
                 :learner-predict (function-by-name (catstr (symbol-name learner-type) "-PREDICT")))))
     (loop for i from 0 below n-learner do
       (setf (aref (one-vs-one-learners-vector mulc) i)
@@ -1055,3 +1087,15 @@
                input 1d0))))
 
 (define-multi-class-learner-train/test-functions one-vs-one)
+
+;; for store/restore model with cl-store
+(defun one-vs-one-clear-functions-for-store (mulc)
+  (setf (one-vs-one-learner-update  mulc) nil
+        (one-vs-one-learner-predict mulc) nil))
+
+(defun one-vs-one-restore-functions (mulc)
+  (let ((learner-type (type-of (aref (one-vs-one-learners-vector mulc) 0))))
+    (setf (one-vs-one-learner-update  mulc)
+          (function-by-name (catstr (symbol-name learner-type) "-UPDATE"))
+          (one-vs-one-learner-predict mulc)
+          (function-by-name (catstr (symbol-name learner-type) "-PREDICT")))))

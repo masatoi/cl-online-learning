@@ -1,0 +1,40 @@
+#!/bin/sh
+#|-*- mode:lisp -*-|#
+#|
+exec ros -Q -- $0 "$@"
+|#
+(progn ;;init forms
+  (ros:ensure-asdf)
+  #+quicklisp (ql:quickload '(:cl-online-learning :cl-store) :silent t))
+
+(defpackage :ros.script.clol-train
+  (:use :cl :cl-online-learning :cl-online-learning.utils))
+(in-package :ros.script.clol-train)
+
+;; Usage: clol-train [options] training_set_file [model_file]
+
+(defmain (training-set-file model-file &key (dim nil) (n-class nil) (sparse t))
+  (multiple-value-bind (training-set dim-from-data)
+      (read-data training-set-file dim :multiclass-p t :sparse-p sparse)
+    (let* ((dim (if dim dim dim-from-data))
+           (min/max-cls (class-min/max training-set))
+           (binary-p (equal min/max-cls '(-2 0)))
+           (n-class (if n-class
+                        n-class
+                        (1+ (- (cadr min/max-cls) (car min/max-cls))))))
+      ;; Set target to -1d0/1d0 (binary) or integer start from 0 (multiclass)
+      (if binary-p
+          (loop for datum in training-set do
+            (setf (car datum) (+ (car datum) 1d0)))
+          (loop for datum in training-set do
+            (setf (car datum) (- (car datum) (car min/max-cls)))))
+      (let ((learner (if binary-p
+                         (make-sparse-arow dim 10d0)
+                         (make-one-vs-rest dim n-class 'sparse-arow 10d0))))
+        (train learner training-set)
+        ;; clear functions
+        (unless binary-p
+          (clol::one-vs-rest-clear-functions-for-store learner))
+        (cl-store:store learner model-file)))))
+
+;;; vim: set ft=lisp lisp:

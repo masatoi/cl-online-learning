@@ -4,7 +4,9 @@
 (defpackage :cl-online-learning.utils
   (:use :cl :cl-online-learning.vector)
   (:nicknames :clol.utils)
-  (:export :shuffle-vector :read-data))
+  (:export :shuffle-vector :read-data
+           :defmain :main
+           :class-min/max))
 
 (in-package :cl-online-learning.utils)
 
@@ -196,3 +198,86 @@
 ;; 		  accuracy-percentage))))))
 ;;     (values (average accuracy-percentage-list)
 ;; 	    accuracy-percentage-list)))
+
+;;; Command line utils
+
+(defun group-arg-list (arg-list)
+  (labels ((iter (arg-list req-list key-list)
+             (if (null arg-list)
+                 (list (reverse req-list) (reverse key-list))
+                 (if (char= (aref (car arg-list) 0) #\-)
+                     (iter (cddr arg-list) req-list (cons (list (car arg-list) (cadr arg-list)) key-list))
+                     (iter (cdr arg-list) (cons (car arg-list) req-list) key-list)))))
+    (iter arg-list nil nil)))
+
+(defun split-lambda-list (lambda-list)
+  (let ((p (position '&key lambda-list)))
+    (if p
+        (list (subseq lambda-list 0 p)
+              (subseq lambda-list (1+ p)))
+        (list lambda-list))))
+
+(define-condition argument-error (simple-error)
+  ((argument-error-message :initarg :argument-error-message
+                           :initform nil
+                           :accessor argument-error-message))
+  (:report (lambda (c s)
+             (format s "argument-error: ~A" (argument-error-message c)))))
+
+(defun sanity-check (lambda-list arg-list)
+  (let ((split-lambda-list (split-lambda-list lambda-list))
+        (group-arg-list (group-arg-list arg-list)))
+    ;; required key check
+    (unless (= (length (car split-lambda-list))
+               (length (car group-arg-list)))
+      (error (make-condition
+              'argument-error
+              :argument-error-message (format nil "Incorrect number of required arguments. Required: ~A"
+                                              (length (car split-lambda-list))))))
+    ;; keyword option check
+    (let ((keys (mapcar #'car (cadr split-lambda-list)))
+          (argkeys (mapcar (lambda (argkey-pair)
+                             (intern (string-upcase (subseq (car argkey-pair) 1))))
+                           (cadr group-arg-list))))
+      (when (set-difference argkeys keys)
+        (error (make-condition
+                'argument-error
+                :argument-error-message (format nil "Missmatch keyword options. Required: ~A" keys)))))
+    (dolist (argkey-pair (cadr group-arg-list))
+      (unless (cadr argkey-pair)
+        (error (make-condition
+                'argument-error
+                :argument-error-message "Odd number of keyword arguments."))))))
+
+(defun flatten (structure)
+  (cond ((null structure) nil)
+        ((atom structure) (list structure))
+        (t (mapcan #'flatten structure))))
+
+(defun arg-list->lambda-arg (arg-list)
+  (mapcar (lambda (str)
+            (if (char= (aref str 0) #\-)
+                (intern (string-upcase (subseq str 1)) "KEYWORD")
+                str))
+          (flatten (group-arg-list arg-list))))
+
+(defmacro defmain (lambda-list &body body)
+  (let ((argv (gensym)))
+    `(defun main (&rest ,argv)
+       (handler-case
+           (progn
+             (sanity-check ',lambda-list ,argv)
+             (apply (lambda ,lambda-list ,@body) (arg-list->lambda-arg ,argv)))
+         (argument-error (c)
+           (format *error-output* "~A~%" (argument-error-message c))
+           (format t "Usage: ~A~%" ',lambda-list))))))
+
+(defun class-min/max (read-data-result)
+  (let ((min-class most-positive-fixnum)
+        (max-class most-negative-fixnum))
+    (loop for datum in read-data-result do
+      (when (< (car datum) min-class)
+        (setf min-class (car datum)))
+      (when (> (car datum) max-class)
+        (setf max-class (car datum))))
+    (list min-class max-class)))

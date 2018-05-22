@@ -18,7 +18,6 @@
 (defun random-uniform (start end)
   (+ (random (- end start)) start))
 
-;; Sampling from Gaussian distribution (Box–Muller's method)
 (defun random-normal (&key (mean 0d0) (sd 1d0))
   (let ((alpha (random 1.0d0))
 	(beta  (random 1.0d0)))

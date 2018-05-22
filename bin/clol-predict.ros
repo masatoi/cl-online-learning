@@ -1,0 +1,32 @@
+#!/bin/sh
+#|-*- mode:lisp -*-|#
+#|
+exec ros -Q -- $0 "$@"
+|#
+(progn ;;init forms
+  (ros:ensure-asdf)
+  #+quicklisp (ql:quickload '(:cl-online-learning :cl-store) :silent t))
+
+(defpackage :ros.script.clol-predict
+  (:use :cl :cl-online-learning :cl-online-learning.utils))
+(in-package :ros.script.clol-predict)
+
+;; Usage: clol-predict [options] test_file model_file output_file
+
+(defmain (test-set-file model-file output-file)
+  (let* ((learner (cl-store:restore model-file))
+         (test-set (read-data test-set-file (dim-of learner) :multiclass-p t :sparse-p t))
+         (min/max-cls (class-min/max test-set))
+         (binary-p (equal min/max-cls '(-2 0))))
+    ;; Set target to -1d0/1d0 (binary) or integer start from 0 (multiclass)
+    (if binary-p
+        (loop for datum in test-set do
+          (setf (car datum) (+ (car datum) 1d0)))
+        (loop for datum in test-set do
+          (setf (car datum) (- (car datum) (car min/max-cls)))))
+    output-file
+    (unless binary-p
+      (clol::one-vs-rest-restore-functions learner))
+    (test learner test-set)))
+
+;;; vim: set ft=lisp lisp:
