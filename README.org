@@ -158,6 +158,20 @@ In a similar way, the sparse version learners are also available in multiclass c
 
 # *** Benchimark
 
+*** Save/Restore model
+For saving a learner model to a file or restoring from the model file, SAVE and RESTORE function are available respectively.
+For the above multiclass classification example, saving / restoring code would be:
+
+#+BEGIN_SRC lisp
+;; Save
+(clol:save arow-1vs1 #P"/tmp/iris.model")
+;; Restore
+(defparameter restored-learner (clol:restore #P"/tmp/iris.model"))
+
+(clol:test restored-learner iris-test)
+; Accuracy: 98.0%, Correct: 49, Total: 50
+#+END_SRC
+
 ** Author
 Satoshi Imai (satoshi.imai@gmail.com)
 
