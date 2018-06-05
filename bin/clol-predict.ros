@@ -14,19 +14,23 @@ exec ros -Q -- $0 "$@"
 ;; Usage: clol-predict [options] test_file model_file output_file
 
 (defmain (test-set-file model-file output-file)
-  (let* ((learner (cl-store:restore model-file))
-         (test-set (read-data test-set-file (dim-of learner) :multiclass-p t :sparse-p t))
+  "Usage: clol-predict test-set-file model-file output-file"
+  (let* ((learner (restore model-file))
+         (multiclass-p (> (n-class-of learner) 2))
+         (sparse-p (sparse-learner? learner))
+         (test-set (progn
+                     (format t "Loading dataset~%")
+                     (read-data test-set-file (dim-of learner) :multiclass-p multiclass-p :sparse-p sparse-p)))
          (min/max-cls (class-min/max test-set))
          (binary-p (equal min/max-cls '(-2 0))))
-    ;; Set target to -1d0/1d0 (binary) or integer start from 0 (multiclass)
+    ;; Set target to -1d0/1d0 (binary) or integer starting from 0 (multiclass)
     (if binary-p
         (loop for datum in test-set do
           (setf (car datum) (+ (car datum) 1d0)))
         (loop for datum in test-set do
           (setf (car datum) (- (car datum) (car min/max-cls)))))
-    output-file
-    (unless binary-p
-      (clol::one-vs-rest-restore-functions learner))
-    (test learner test-set)))
+    ;; test
+    (with-open-file (s output-file :direction :output :if-exists :supersede)
+      (test learner test-set :stream s))))
 
 ;;; vim: set ft=lisp lisp:

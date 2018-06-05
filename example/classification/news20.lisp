@@ -42,6 +42,12 @@
   (train news20-arow-1vr news20-train)
   (test news20-arow-1vr news20-test))
 
+(defparameter news20-scw (make-one-vs-one news20-dim news20-class 'sparse-scw 0.9d0 1d0))
+
+(loop repeat 10 do
+  (train news20-scw news20-train)
+  (test news20-scw news20-test))
+
 ;;; Almost data dimension < 500
 ;; (ql:quickload :clgplot)
 ;; (clgp:plot-histogram

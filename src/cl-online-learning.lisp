@@ -7,7 +7,7 @@
   (:use :cl :cl-online-learning.vector)
   (:nicknames :clol)
   (:export
-   :train :test :dim-of
+   :train :test :dim-of :n-class-of :sparse-learner?
    :make-perceptron :perceptron-update :perceptron-train :perceptron-predict :perceptron-test
    :make-arow :arow-update :arow-train :arow-predict :arow-test
    :make-scw :scw-update :scw-train :scw-predict :scw-test
@@ -112,12 +112,15 @@
               (,(intern (catstr (symbol-name learner-type) "-WEIGHT")) learner)
               (,(intern (catstr (symbol-name learner-type) "-BIAS")) learner))))
      (defun ,(intern (catstr (symbol-name learner-type) "-TEST"))
-         (learner test-data &key (quiet-p nil))
+         (learner test-data &key (quiet-p nil) (stream nil))
        (let* ((len (length test-data))
-              (n-correct (count-if (lambda (datum)
-                                     (= (,(intern (catstr (symbol-name learner-type) "-PREDICT"))
-                                          learner (cdr datum)) (car datum)))
-                                   test-data))
+              (n-correct (count-if
+                          (lambda (datum)
+                            (let ((predict (,(intern (catstr (symbol-name learner-type) "-PREDICT"))
+                                            learner (cdr datum))))
+                              (format stream "~A~%" predict)
+                              (= predict (car datum))))
+                          test-data))
               (accuracy (* (/ n-correct len) 100.0)))
          (if (not quiet-p)
            (format t "Accuracy: ~f%, Correct: ~A, Total: ~A~%" accuracy n-correct len))
@@ -128,10 +131,10 @@
                    :cl-online-learning)
            learner training-data))
 
-(defun test (learner test-data)
+(defun test (learner test-data &key (quiet-p nil) (stream nil))
   (funcall (intern (catstr (symbol-name (type-of learner)) "-TEST")
                    :cl-online-learning)
-           learner test-data))
+           learner test-data :quiet-p quiet-p :stream stream))
 
 (defun dim-of (learner)
   (let ((learner
@@ -142,6 +145,18 @@
     (length (funcall (intern (catstr (symbol-name (type-of learner)) "-WEIGHT")
                              :cl-online-learning)
                      learner))))
+
+(defun n-class-of (learner)
+  (typecase learner
+    (one-vs-one  (one-vs-one-n-class learner))
+    (one-vs-rest (one-vs-rest-n-class learner))
+    (t 2)))
+
+(defun sparse-learner? (learner)
+  (typecase learner
+    (one-vs-one  (sparse-symbol? (type-of (aref (one-vs-one-learners-vector learner) 0))))
+    (one-vs-rest (sparse-symbol? (type-of (aref (one-vs-rest-learners-vector learner) 0))))
+    (t (sparse-symbol? (type-of learner)))))
 
 ;;; Perceptron
 
@@ -893,22 +908,25 @@
        (etypecase training-data
          (list (dolist (datum training-data)
                  (,(intern (catstr (symbol-name learner-type) "-UPDATE"))
-                   learner (cdr datum) (car datum))))
+                  learner (cdr datum) (car datum))))
          (vector (loop for datum across training-data do
            (,(intern (catstr (symbol-name learner-type) "-UPDATE"))
-                     learner (cdr datum) (car datum)))))
+            learner (cdr datum) (car datum)))))
        learner)
      
      (defun ,(intern (catstr (symbol-name learner-type) "-TEST"))
-         (learner test-data &key (quiet-p nil))
+         (learner test-data &key (quiet-p nil) (stream nil))
        (let* ((len (length test-data))
-              (n-correct (count-if (lambda (datum)
-                                     (= (,(intern (catstr (symbol-name learner-type) "-PREDICT"))
-                                          learner (cdr datum)) (car datum)))
-                                   test-data))
+              (n-correct (count-if
+                          (lambda (datum)
+                            (let ((predict (,(intern (catstr (symbol-name learner-type) "-PREDICT"))
+                                            learner (cdr datum))))
+                              (format stream "~A~%" predict)
+                              (= predict (car datum))))
+                          test-data))
               (accuracy (* (/ n-correct len) 100.0)))
          (if (not quiet-p)
-           (format t "Accuracy: ~f%, Correct: ~A, Total: ~A~%" accuracy n-correct len))
+             (format t "Accuracy: ~f%, Correct: ~A, Total: ~A~%" accuracy n-correct len))
          (values accuracy n-correct len)))))
 
 ;;; one-vs-rest

@@ -6,7 +6,7 @@
   (:nicknames :clol.utils)
   (:export :shuffle-vector :read-data
            :defmain :main
-           :class-min/max))
+           :class-min/max :to-int :to-float))
 
 (in-package :cl-online-learning.utils)
 
@@ -264,13 +264,23 @@
 (defmacro defmain (lambda-list &body body)
   (let ((argv (gensym)))
     `(defun main (&rest ,argv)
+       ,(if (stringp (car body)) (car body))
        (handler-case
            (progn
              (sanity-check ',lambda-list ,argv)
-             (apply (lambda ,lambda-list ,@body) (arg-list->lambda-arg ,argv)))
+             (apply (lambda ,lambda-list
+                      ,@(if (stringp (car body)) (cdr body) body))
+                    (arg-list->lambda-arg ,argv)))
          (argument-error (c)
            (format *error-output* "~A~%" (argument-error-message c))
-           (format t "Usage: ~A~%" ',lambda-list))))))
+           (format t "Usage: ~A~%" ',lambda-list)
+           (let ((docstr (documentation 'main 'function)))
+             (if docstr (format t "~%~A~%" docstr))))
+         (error (c)
+           (format *error-output* "Error: ~A~%" c)
+           (format t "Usage: ~A~%" ',lambda-list)
+           (let ((docstr (documentation 'main 'function)))
+             (if docstr (format t "~%~A~%" docstr))))))))
 
 (defun class-min/max (read-data-result)
   (let ((min-class most-positive-fixnum)
@@ -281,3 +291,17 @@
       (when (> (car datum) max-class)
         (setf max-class (car datum))))
     (list min-class max-class)))
+
+(defun to-int (x)
+  (etypecase x
+    (float (truncate x))
+    (integer x)
+    (string (truncate (svmformat::parse-float x)))))
+
+(defun to-float (x)
+  (coerce
+   (etypecase x
+     (float x)
+     (integer x)
+     (string (svmformat::parse-float x)))
+   'double-float))

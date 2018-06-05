@@ -9,32 +9,80 @@ exec ros -Q -- $0 "$@"
 
 (defpackage :ros.script.clol-train
   (:use :cl :cl-online-learning :cl-online-learning.utils))
+
 (in-package :ros.script.clol-train)
 
-;; Usage: clol-train [options] training_set_file [model_file]
-
-(defmain (training-set-file model-file &key (dim nil) (n-class nil) (sparse t))
-  (multiple-value-bind (training-set dim-from-data)
-      (read-data training-set-file dim :multiclass-p t :sparse-p sparse)
-    (let* ((dim (if dim dim dim-from-data))
-           (min/max-cls (class-min/max training-set))
-           (binary-p (equal min/max-cls '(-2 0)))
-           (n-class (if n-class
-                        n-class
-                        (1+ (- (cadr min/max-cls) (car min/max-cls))))))
-      ;; Set target to -1d0/1d0 (binary) or integer start from 0 (multiclass)
-      (if binary-p
-          (loop for datum in training-set do
-            (setf (car datum) (+ (car datum) 1d0)))
-          (loop for datum in training-set do
-            (setf (car datum) (- (car datum) (car min/max-cls)))))
-      (let ((learner (if binary-p
-                         (make-sparse-arow dim 10d0)
-                         (make-one-vs-rest dim n-class 'sparse-arow 10d0))))
-        (train learner training-set)
-        ;; clear functions
-        (unless binary-p
-          (clol::one-vs-rest-clear-functions-for-store learner))
-        (cl-store:store learner model-file)))))
+(defmain (training-set-file model-file
+                            &key (dim nil) (n-class nil) (n-epoch 1)
+                            (type 1) (sparse 1) (mtype 0) (gamma 10.0) (eta 0.9) (c 1.0))
+  "Usage: clol-train [options] training-set-file model-file
+options:
+-dim : number of feature dimensions (optional)
+-n-class : number of classes (optional)
+-n-epoch : number of epochs (optional)
+-type : type of learning model
+  for binary or multi-class classification
+        0 -- Perceptron
+        1 -- AROW (default)
+        2 -- SCW-I
+-sparse : whether sparse data or not
+        0 -- binary
+        1 -- sparse  (default)
+-mtype : multiclass classifier type
+        0 -- one-vs-rest (default)
+        1 -- one-vs-one
+-gamma : regularization parameter for AROW (default 10.0)
+-eta : decay parameter for SCW-I (default 0.9 (0 < eta < 1))
+-c : regularization parameter for SCW-I (default 1.0)"
+  (let ((sparse-p (= (to-int sparse) 1)))
+    (multiple-value-bind (training-set dim-from-data)
+        (progn
+          (format t "Loading dataset~%")
+          (read-data training-set-file dim :multiclass-p t :sparse-p sparse-p))
+      (let* ((dim (if dim (to-int dim) dim-from-data))
+             (min/max-cls (class-min/max training-set))
+             (binary-p (equal min/max-cls '(-2 0)))
+             (n-class (if n-class (to-int n-class) (1+ (- (cadr min/max-cls) (car min/max-cls)))))
+             (n-epoch (to-int n-epoch))
+             (type    (to-int type))
+             (mtype   (to-int mtype))
+             (gamma   (to-float gamma))
+             (eta     (to-float eta))
+             (c       (to-float c))
+             (mconst  (ecase mtype (0 #'make-one-vs-rest) (1 #'make-one-vs-one))))
+        ;; Set target to -1d0/1d0 (binary) or integer starting from 0 (multiclass)
+        (if binary-p
+            (loop for datum in training-set do
+              (setf (car datum) (+ (car datum) 1d0)))
+            (loop for datum in training-set do
+              (setf (car datum) (- (car datum) (car min/max-cls)))))
+        (let ((learner
+                (cond ((and binary-p sparse-p)
+                       (ecase type
+                         (0 (make-sparse-perceptron dim))
+                         (1 (make-sparse-arow dim gamma))
+                         (2 (make-sparse-scw dim eta c))))
+                      ((and binary-p (not sparse-p))
+                       (ecase type
+                         (0 (make-perceptron dim))
+                         (1 (make-arow dim gamma))
+                         (2 (make-scw dim eta c))))
+                      ((and (not binary-p) sparse-p)
+                       (ecase type
+                         (0 (funcall mconst dim n-class 'sparse-perceptron))
+                         (1 (funcall mconst dim n-class 'sparse-arow gamma))
+                         (2 (funcall mconst dim n-class 'sparse-scw eta c))))
+                      ((and (not binary-p) (not sparse-p))
+                       (ecase type
+                         (0 (funcall mconst dim n-class 'perceptron))
+                         (1 (funcall mconst dim n-class 'arow gamma))
+                         (2 (funcall mconst dim n-class 'scw eta c)))))))
+          ;; train
+          (loop for i from 1 to n-epoch do
+            (format t "Training epoch [~A/~A]~%" i n-epoch)
+            (train learner training-set))
+          ;; store
+          (save learner model-file)
+          (format t "~A~%" learner))))))
 
 ;;; vim: set ft=lisp lisp:
