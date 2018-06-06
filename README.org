@@ -17,6 +17,10 @@ A collection of machine learning algorithms for online linear classification wri
 - one-vs-rest ( K binary classifier required )
 - one-vs-one ( K*(K-1)/2 binary classifier required )
 
+*** Command line tools
+- Implemented as roswell script
+- See https://github.com/masatoi/cl-online-learning/wiki/Using-as-command-line-tools
+
 ** Installation
 cl-online-learning is available from Quicklisp.
 #+BEGIN_SRC 
