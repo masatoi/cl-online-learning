@@ -1,7 +1,7 @@
 * Cl-Online-Learning
 
 [[http://quickdocs.org/cl-online-learning/][http://quickdocs.org/badge/cl-online-learning.svg]]
-[[https://travis-ci.org/masatoi/cl-online-learning][https://travis-ci.org/masatoi/cl-online-learning.svg?branch=master]]
+[[https://github.com/masatoi/cl-online-learning/actions?query=workflow%3ACI][https://github.com/masatoi/cl-online-learning/workflows/CI/badge.svg]]
 
 A collection of machine learning algorithms for online linear classification written in Common Lisp.
 
