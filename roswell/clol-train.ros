@@ -50,10 +50,10 @@ options:
              (eta     (to-float eta))
              (c       (to-float c))
              (mconst  (ecase mtype (0 #'make-one-vs-rest) (1 #'make-one-vs-one))))
-        ;; Set target to -1d0/1d0 (binary) or integer starting from 0 (multiclass)
+        ;; Set target to -1/1 (binary) or integer starting from 0 (multiclass)
         (if binary-p
             (loop for datum in training-set do
-              (setf (car datum) (+ (car datum) 1d0)))
+              (setf (car datum) (+ (car datum) 1.0)))
             (loop for datum in training-set do
               (setf (car datum) (- (car datum) (car min/max-cls)))))
         (let ((learner
