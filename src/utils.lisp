@@ -78,7 +78,7 @@
 (defun mean-vector (dataset)
   (let* ((datum-dim (length (cdr (elt dataset 0))))
          (data-size (length dataset))
-	 (sum-vec (make-dvec datum-dim 0.0)))
+	 (sum-vec (make-vec datum-dim 0.0)))
     (doseq (datum dataset)
       (v+ (cdr datum) sum-vec sum-vec))
     (v*n sum-vec (/ 1.0 data-size) sum-vec)
@@ -87,7 +87,7 @@
 (defun standard-deviation-vector (dataset)
   (let* ((datum-dim (length (cdr (elt dataset 0))))
 	 (data-size (length dataset))
-	 (sum-vec (make-dvec datum-dim 0.0))
+	 (sum-vec (make-vec datum-dim 0.0))
 	 (ave-vec (mean-vector dataset)))
     (doseq (datum dataset)
       (loop for i from 0 to (1- datum-dim) do
