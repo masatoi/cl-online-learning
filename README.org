@@ -38,7 +38,7 @@ ros install masatoi/cl-online-learning
 #+END_SRC
 ** Usage
 *** Prepare dataset
-A data point is a pair of a class label (+1 or -1) and a input vector. Both of them have to be declared as double-float.
+A data point is a pair of a class label (+1 or -1) and a input vector. Both of them have to be declared as single-float.
 
 And dataset is represented as a sequence of data points.
 READ-DATA function is available to make a dataset from a sparse format used in LIBSVM (http://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/). This function requires the number of features of that dataset.
@@ -55,24 +55,20 @@ READ-DATA function is available to make a dataset from a sparse format used in L
 ;; A data point
 (car a1a)
 
-; (-1.0d0
-;  . #(0.0d0 0.0d0 1.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 1.0d0 0.0d0
-;      0.0d0 1.0d0 0.0d0 0.0d0 0.0d0 0.0d0 1.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0
-;      0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0
-;      0.0d0 0.0d0 1.0d0 0.0d0 0.0d0 1.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0
-;      0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 1.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0
-;      0.0d0 0.0d0 0.0d0 1.0d0 0.0d0 0.0d0 1.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0
-;      1.0d0 0.0d0 1.0d0 1.0d0 0.0d0 0.0d0 0.0d0 1.0d0 0.0d0 0.0d0 1.0d0 0.0d0
-;      0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0
-;      0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0
-;      0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0 0.0d0
-;      0.0d0 0.0d0 0.0d0))
+; (-1.0
+;  . #(0.0 0.0 1.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 1.0 0.0 0.0 1.0 0.0 0.0 0.0 0.0
+;     1.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0
+;     0.0 0.0 1.0 0.0 0.0 1.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0
+;     1.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 1.0 0.0 0.0 1.0 0.0 0.0 0.0 0.0 0.0
+;     1.0 0.0 1.0 1.0 0.0 0.0 0.0 1.0 0.0 0.0 1.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0
+;     0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0
+;     0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0))
 #+END_SRC
 
 *** Define learner
 A learner object is just a struct, therefore their constructor is available to make it.
 #+BEGIN_SRC lisp
-(defparameter arow-learner (clol:make-arow a1a-dim 10d0))
+(defparameter arow-learner (clol:make-arow a1a-dim 10))
 #+END_SRC
 
 *** Update and Train
@@ -91,7 +87,7 @@ It may be necessary to call this function several times until learning converges
 *** Predict and Test
 #+BEGIN_SRC lisp
 (clol:arow-predict arow-learner (cdar a1a))
-; => -1.0d0
+; => -1.0
 
 (clol:test arow-learner a1a)
 ; Accuracy: 84.85981%, Correct: 1362, Total: 1605
@@ -120,7 +116,7 @@ ONE-VS-REST and ONE-VS-ONE are available for multiclass classification by using 
 (defparameter arow-1vs1
   (clol:make-one-vs-one iris-dim      ; Input data dimension
                         3             ; Number of class
-                        'arow 0.1d0)) ; Binary classifier type and its parameters
+                        'arow 0.1)) ; Binary classifier type and its parameters
 
 ;; Train and test model
 (clol:train arow-1vs1 iris-train)
@@ -136,7 +132,7 @@ For example, news20.binary data has too high dimensional features to handle with
 (defparameter news20.binary-dim 1355191)
 (defparameter news20.binary (clol.utils:read-data "/path/to/news20.binary" news20.binary-dim :sparse-p t))
 
-(defparameter news20.binary.arow (clol:make-sparse-arow news20.binary-dim 10d0))
+(defparameter news20.binary.arow (clol:make-sparse-arow news20.binary-dim 10))
 (time (loop repeat 20 do (clol:train news20.binary.arow news20.binary)))
 ;; Evaluation took:
 ;;   1.527 seconds of real time
@@ -154,7 +150,7 @@ In a similar way, the sparse version learners are also available in multiclass c
 (defparameter news20-dim 62060)
 (defparameter news20-train (clol.utils:read-data "/path/to/news20.scale" news20-dim :sparse-p t :multiclass-p t))
 (defparameter news20-test (clol.utils:read-data "/path/to/news20.t.scale" news20-dim :sparse-p t :multiclass-p t))
-(defparameter news20-arow (clol:make-one-vs-rest news20-dim 20 'sparse-arow 10d0))
+(defparameter news20-arow (clol:make-one-vs-rest news20-dim 20 'sparse-arow 10))
 (loop repeat 12 do (clol:train news20-arow news20-train))
 (clol:test news20-arow news20-test)
 ; Accuracy: 86.90208%, Correct: 3470, Total: 3993

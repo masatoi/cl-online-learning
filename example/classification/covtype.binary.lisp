@@ -16,12 +16,12 @@
 (defparameter covtype (read-data "/home/wiz/datasets/covtype.libsvm.binary.scale" covtype-dim))
 (defparameter covtype-data
   (mapcar (lambda (datum)
-            (if (= (car datum) 1.0d0)
-                (cons -1d0 (cdr datum))
-                (cons 1d0 (cdr datum))))
+            (if (= (car datum) 1.0)
+                (cons -1.0 (cdr datum))
+                (cons 1.0 (cdr datum))))
           covtype))
 
-(defparameter arow-learner (make-arow covtype-dim 10d0))
+(defparameter arow-learner (make-arow covtype-dim 10))
 (loop repeat 100 do
   (train arow-learner covtype-data)
   (test arow-learner covtype-data))
