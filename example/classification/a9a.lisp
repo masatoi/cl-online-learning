@@ -13,12 +13,34 @@
 (in-package :cl-online-learning.examples)
 
 (defparameter a9a-dim 123)
-(defparameter a9a-train (read-data "/home/wiz/datasets/a9a" a9a-dim))
-(defparameter a9a-test (read-data "/home/wiz/datasets/a9a.t" a9a-dim))
+(defparameter a9a-train (read-data "/mnt/data2/datasets/a9a" a9a-dim))
+(defparameter a9a-test (read-data "/mnt/data2/datasets/a9a.t" a9a-dim))
 
 (defparameter perceptron-learner (make-perceptron a9a-dim))
 (time (loop repeat 1000 do (train perceptron-learner a9a-train)))
-(test perceptron-learner a9a-test)
+(time (test perceptron-learner a9a-test))
+
+;; EXAMPLES> (time (loop repeat 1000 do (train perceptron-learner a9a-train)))
+;; Evaluation took:
+;;   7.083 seconds of real time
+;;   7.009804 seconds of total run time (6.994631 user, 0.015173 system)
+;;   98.97% CPU
+;;   24,025,434,550 processor cycles
+;;   111,574,960 bytes consed
+  
+;; NIL
+;; EXAMPLES> (time (test perceptron-learner a9a-test))
+;; Accuracy: 79.72483%, Correct: 12980, Total: 16281
+;; Evaluation took:
+;;   0.012 seconds of real time
+;;   0.012669 seconds of total run time (0.012639 user, 0.000030 system)
+;;   108.33% CPU
+;;   45,663,009 processor cycles
+;;   2,785,072 bytes consed
+  
+;; 79.72483
+;; 12980
+;; 16281
 
 ;; Accuracy: 79.72483%, Correct: 12980, Total: 16281
 
@@ -64,8 +86,8 @@
 ;;   25,939,324,287 processor cycles
 ;;   1,674,404,304 bytes consed
 
-(defparameter a9a-train.sp (read-data "/home/wiz/datasets/a9a" a9a-dim :sparse-p t))
-(defparameter a9a-test.sp (read-data "/home/wiz/datasets/a9a.t" a9a-dim :sparse-p t))
+(defparameter a9a-train.sp (read-data "/mnt/data2/datasets/a9a" a9a-dim :sparse-p t))
+(defparameter a9a-test.sp (read-data "/mnt/data2/datasets/a9a.t" a9a-dim :sparse-p t))
 
 (defparameter perceptron-learner.sp (make-sparse-perceptron a9a-dim))
 
@@ -92,7 +114,7 @@
 ;;   3,685,724,247 processor cycles
 ;;   111,641,760 bytes consed
 
-(defparameter arow-learner (make-arow a9a-dim 10d0))
+(defparameter arow-learner (make-arow a9a-dim 10.0))
 (time (loop repeat 1000 do (train arow-learner a9a-train)))
 (test arow-learner a9a-test)
 
