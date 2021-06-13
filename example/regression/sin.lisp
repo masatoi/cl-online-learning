@@ -16,25 +16,28 @@
 ;;; Utilities
 
 (defun random-uniform (start end)
-  (+ (random (- end start)) start))
+  (coerce
+   (+ (random (- end start)) start)
+   'single-float))
 
 (defun random-normal (&key (mean 0.0) (sd 1.0))
   (let ((alpha (random 1.0))
 	(beta  (random 1.0)))
-    (+ (* sd
-	  (sqrt (* -2 (log alpha)))
-	  (sin (* 2 pi beta)))
-       mean)))
+    (coerce
+     (+ (* sd
+	   (sqrt (* -2 (log alpha)))
+	   (sin (* 2 pi beta)))
+        mean)
+     'single-float)))
 
 (defun seq (start end &optional (by 1))
   (loop for x from start to end by by collect x))
-
 
 ;;; Make Dataset (Sine wave)
 
 (defparameter x-lst
   (loop repeat 100
-        collect (make-array 1 :element-type 'double-float
+        collect (make-array 1 :element-type 'single-float
                               :initial-element (random-uniform (- pi) pi))))
 
 (defparameter y-lst
