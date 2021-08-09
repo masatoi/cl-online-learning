@@ -187,7 +187,7 @@
 ;;   105,792,514,974 processor cycles
 ;;   5,881,026,464 bytes consed
 
-(defparameter arow-learner.sp (make-sparse-arow a9a-dim 10d0))
+(defparameter arow-learner.sp (make-sparse-arow a9a-dim 10.0))
 (time (loop repeat 1000 do (train arow-learner.sp a9a-train.sp)))
 (test arow-learner.sp a9a-test.sp)
 
@@ -225,7 +225,7 @@
 ;;   10,767,676,763 processor cycles
 ;;   1,265,828,608 bytes consed
 
-(defparameter scw-learner (make-scw a9a-dim 0.9d0 0.1d0))
+(defparameter scw-learner (make-scw a9a-dim 0.9 0.1))
 (time (loop repeat 1000 do (train scw-learner a9a-train)))
 (test scw-learner a9a-test)
 
@@ -263,7 +263,7 @@
 ;;   35,648,299,084 processor cycles
 ;;   329,023,360 bytes consed
 
-(defparameter scw-learner.sp (make-sparse-scw a9a-dim 0.9d0 0.1d0))
+(defparameter scw-learner.sp (make-sparse-scw a9a-dim 0.9 0.1))
 (time (loop repeat 1000 do (train scw-learner.sp a9a-train.sp)))
 (test scw-learner.sp a9a-test.sp)
 
@@ -283,7 +283,7 @@
 ;;   8,564,202,770 processor cycles
 ;;   329,047,584 bytes consed
 
-(defparameter lr+sgd-learner (make-lr+sgd a9a-dim 0.001d0 0.001d0))
+(defparameter lr+sgd-learner (make-lr+sgd a9a-dim 0.001 0.001))
 (time (loop repeat 1000 do (train lr+sgd-learner a9a-train)))
 (test lr+sgd-learner a9a-test)
 
@@ -306,7 +306,7 @@
   
 ;; Accuracy: 85.129906%, Correct: 13860, Total: 16281
 
-(defparameter lr+sgd-learner.sp (make-sparse-lr+sgd a9a-dim 0.001d0 0.001d0))
+(defparameter lr+sgd-learner.sp (make-sparse-lr+sgd a9a-dim 0.001 0.001))
 (time (loop repeat 1000 do (train lr+sgd-learner.sp a9a-train.sp)))
 (test lr+sgd-learner.sp a9a-test.sp)
 
@@ -320,7 +320,7 @@
 
 ;; Accuracy: 85.129906%, Correct: 13860, Total: 16281
 
-(defparameter adam-learner (make-lr+adam a9a-dim 0.001d0 0.001d0 1.d-8 0.9d0 0.99d0))
+(defparameter adam-learner (make-lr+adam a9a-dim 0.001 0.001 1.e-8 0.9 0.99))
 (time (loop repeat 1000 do (train adam-learner a9a-train)))
 (test  adam-learner a9a-test)
 
@@ -341,7 +341,7 @@
 ;;   213,348,017,096 processor cycles
 ;;   6,772,740,016 bytes consed
 
-(defparameter adam-learner.sp (make-sparse-lr+adam a9a-dim 0.001d0 0.001d0 1.d-8 0.9d0 0.99d0))
+(defparameter adam-learner.sp (make-sparse-lr+adam a9a-dim 0.001 0.001 1.e-8 0.9 0.99))
 (time (loop repeat 1000 do (train adam-learner.sp a9a-train.sp)))
 (test  adam-learner.sp a9a-test.sp)
 

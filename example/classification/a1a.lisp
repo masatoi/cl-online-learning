@@ -20,32 +20,32 @@
 (train perceptron-learner a1a-train)
 (test perceptron-learner a1a-test)
 
-(defparameter arow-learner (make-arow a1a-dim 10d0))
+(defparameter arow-learner (make-arow a1a-dim 10.0))
 (train arow-learner a1a-train)
 (test arow-learner a1a-test)
 
-(defparameter scw-learner (make-scw  a1a-dim 0.9d0 0.1d0))
+(defparameter scw-learner (make-scw  a1a-dim 0.9 0.1))
 (train scw-learner a1a-train)
 (test scw-learner a1a-test)
 
-(defparameter sgd-learner (make-lr+sgd a1a-dim 0.00001d0 0.01d0))
+(defparameter sgd-learner (make-lr+sgd a1a-dim 0.00001 0.01))
 (train sgd-learner a1a-train)
 (test sgd-learner a1a-test)
 
-(loop for C in '(0d0 0.00001d0 0.0001d0 0.001d0 0.01d0 0.1d0 1d0) do
-  (defparameter sgd-learner (clol::make-lr+sgd a1a-dim C 0.01d0))
-  (print (clol::sgd-C sgd-learner))
+(loop for C in '(0.0 0.00001 0.0001 0.001 0.01 0.1 1.0) do
+  (defparameter sgd-learner (clol::make-lr+sgd a1a-dim C 0.01))
+  (print (clol::lr+sgd-C sgd-learner))
   (loop repeat 20 do
     (train sgd-learner a1a-train)
     (test  sgd-learner a1a-test)))
 
 ; α = 0.001, β1 = 0.9, β2 = 0.999 and ε = 10^-8
-(defparameter adam-learner (make-lr+adam a1a-dim 0.000001d0 0.001d0 1.d-8 0.9d0 0.99d0))
+(defparameter adam-learner (make-lr+adam a1a-dim 0.000001 0.001 1.e-8 0.9 0.99))
 (train adam-learner a1a-train)
 (test adam-learner a1a-test)
 
-(loop for C in '(0d0 0.00001d0 0.0001d0 0.001d0 0.01d0 0.1d0 1d0) do
-  (defparameter adam-learner (make-lr+adam a1a-dim C 0.001d0 1.d-8 0.9d0 0.99d0))
+(loop for C in '(0.0 0.00001 0.0001 0.001 0.01 0.1 1.0) do
+  (defparameter adam-learner (make-lr+adam a1a-dim C 0.001 1.e-8 0.9 0.99))
   (format t "lr+adam-C: ~A~%" (clol::lr+adam-C adam-learner))
   (loop repeat 20 do
     (train adam-learner a1a-train)
@@ -60,18 +60,18 @@
 (train sparse-perceptron-learner sparse-a1a-train)
 (test sparse-perceptron-learner sparse-a1a-test)
 
-(defparameter sparse-arow-learner (make-sparse-arow a1a-dim 10d0))
+(defparameter sparse-arow-learner (make-sparse-arow a1a-dim 10.0))
 (train sparse-arow-learner sparse-a1a-train)
 (test sparse-arow-learner sparse-a1a-test)
 
-(defparameter sparse-scw-learner (make-sparse-scw a1a-dim 0.9d0 0.1d0))
+(defparameter sparse-scw-learner (make-sparse-scw a1a-dim 0.9 0.1))
 (train sparse-scw-learner sparse-a1a-train)
 (sparse-scw-test sparse-scw-learner sparse-a1a-test)
 
-(defparameter sparse-sgd-learner (make-sparse-lr+sgd a1a-dim 0.00001d0 0.01d0))
+(defparameter sparse-sgd-learner (make-sparse-lr+sgd a1a-dim 0.00001 0.01))
 (train sparse-sgd-learner sparse-a1a-train)
 (test sparse-sgd-learner sparse-a1a-test)
 
-(defparameter sparse-adam-learner (make-sparse-lr+adam a1a-dim 0.000001d0 0.001d0 1.d-8 0.9d0 0.99d0))
+(defparameter sparse-adam-learner (make-sparse-lr+adam a1a-dim 0.000001 0.001 1.e-8 0.9 0.99))
 (train sparse-adam-learner sparse-a1a-train)
 (test sparse-adam-learner sparse-a1a-test)

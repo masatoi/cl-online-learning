@@ -22,17 +22,17 @@
 (dolist (datum mnist-test)  (incf (car datum)))
 
 ;; 11sec Accuracy: 94.65%, Correct: 9465, Total: 10000
-(defparameter mnist-arow (make-one-vs-one mnist-dim mnist-class 'arow 10d0))
+(defparameter mnist-arow (make-one-vs-one mnist-dim mnist-class 'arow 10.0))
 (time (loop repeat 10 do
   (train mnist-arow mnist-train)
   (test mnist-arow mnist-test)))
 
-(defparameter mnist-arow (make-one-vs-rest mnist-dim mnist-class 'arow 10d0))
+(defparameter mnist-arow (make-one-vs-rest mnist-dim mnist-class 'arow 10.0))
 (time (loop repeat 10 do
   (train mnist-arow mnist-train)
   (test mnist-arow mnist-test)))
 
-(defparameter mnist-scw (make-one-vs-one mnist-dim mnist-class 'scw 0.9d0 0.1d0))
+(defparameter mnist-scw (make-one-vs-one mnist-dim mnist-class 'scw 0.9 0.1))
 (time (loop repeat 10 do
   (train mnist-scw mnist-train)
   (test mnist-scw mnist-test)))
@@ -43,12 +43,12 @@
   (train mnist-perceptron mnist-train)
   (test mnist-perceptron mnist-test)))
 
-(defparameter mnist-sgd (make-one-vs-one mnist-dim mnist-class 'lr+sgd 0.00001d0 0.01d0))
+(defparameter mnist-sgd (make-one-vs-one mnist-dim mnist-class 'lr+sgd 0.00001 0.01))
 (time (loop repeat 10 do
   (train mnist-sgd mnist-train)
   (test mnist-sgd mnist-test)))
 
-(defparameter mnist-adam (make-one-vs-one mnist-dim mnist-class 'lr+adam 0.001d0 0.001d0 1.d-8 0.9d0 0.99d0))
+(defparameter mnist-adam (make-one-vs-one mnist-dim mnist-class 'lr+adam 0.001 0.001 1.e-8 0.9 0.99))
 (time (loop repeat 10 do
   (train mnist-adam mnist-train)
   (test mnist-adam mnist-test)))
@@ -63,7 +63,7 @@
     (test mnist-lr-sgd mnist-test))))
 
 ;; 20 sec Accuracy: 93.87%, Correct: 9387, Total: 10000
-(defparameter mnist-lr-sgd (make-one-vs-one mnist-dim mnist-class 'sgd 0.00001d0 0.01d0))
+(defparameter mnist-lr-sgd (make-one-vs-one mnist-dim mnist-class 'sgd 0.00001 0.01))
 (time (loop repeat 10 do
   (train mnist-lr-sgd mnist-train)
   (test mnist-lr-sgd mnist-test)))
@@ -113,7 +113,7 @@
 ;;           0   0.0                                     elsewhere
 
 ;; 100 sec Accuracy: 94.29%, Correct: 9429, Total: 10000
-(defparameter mnist-lr-adam (make-one-vs-one mnist-dim mnist-class 'adam 0.000001d0 0.001d0 1.d-8 0.9d0 0.99d0))
+(defparameter mnist-lr-adam (make-one-vs-one mnist-dim mnist-class 'adam 0.000001 0.001 1.e-8 0.9 0.99))
 (time (loop repeat 10 do
   (train mnist-lr-adam mnist-train)
   (test mnist-lr-adam mnist-test)))
@@ -158,7 +158,7 @@
 (dolist (datum mnist-train.sp) (incf (car datum)))
 (dolist (datum mnist-test.sp)  (incf (car datum)))
 
-(defparameter mnist-arow.sp (make-one-vs-one mnist-dim mnist-class 'sparse-arow 10d0))
+(defparameter mnist-arow.sp (make-one-vs-one mnist-dim mnist-class 'sparse-arow 10.0))
 (time (loop repeat 8 do (train mnist-arow.sp mnist-train.sp)))
 
 ;; Evaluation took:
