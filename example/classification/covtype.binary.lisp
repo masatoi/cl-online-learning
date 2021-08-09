@@ -22,16 +22,16 @@
           covtype))
 
 (defparameter arow-learner (make-arow covtype-dim 10))
-(loop repeat 100 do
+(loop repeat 10 do
   (train arow-learner covtype-data)
   (test arow-learner covtype-data))
 
-(defparameter scw-learner (make-scw covtype-dim 0.99d0 0.01d0))
-(loop repeat 100 do
+(defparameter scw-learner (make-scw covtype-dim 0.99 0.01))
+(loop repeat 10 do
   (train scw-learner covtype-data)
   (test scw-learner covtype-data))
 
-(defparameter lr-adam-learner (make-lr+adam covtype-dim 0.000001d0 0.001d0 1.d-8 0.9d0 0.99d0))
+(defparameter lr-adam-learner (make-lr+adam covtype-dim 0.000001 0.001 1.e-8 0.9 0.99))
 (loop repeat 10 do
   (train lr-adam-learner covtype-data)
   (test lr-adam-learner covtype-data))
