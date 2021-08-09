@@ -20,7 +20,7 @@
 (defparameter news20-test
   (read-data "/home/wiz/datasets/news20.t.scale" news20-dim :sparse-p t :multiclass-p t))
 
-(defparameter news20-arow (make-one-vs-one news20-dim news20-class 'sparse-arow 1d0))
+(defparameter news20-arow (make-one-vs-one news20-dim news20-class 'sparse-arow 1.0))
 
 (time (train news20-arow news20-train))
 (time (test news20-arow news20-test))
@@ -29,7 +29,7 @@
   (train news20-arow news20-train)
   (test news20-arow news20-test))
 
-(defparameter news20-arow-1vr (make-one-vs-rest news20-dim news20-class 'sparse-arow 10d0))
+(defparameter news20-arow-1vr (make-one-vs-rest news20-dim news20-class 'sparse-arow 10.0))
 
 (time (train news20-arow-1vr news20-train))
 
@@ -48,7 +48,7 @@
   (train news20-arow-1vr news20-train)
   (test news20-arow-1vr news20-test))
 
-(defparameter news20-scw (make-one-vs-one news20-dim news20-class 'sparse-scw 0.9d0 1d0))
+(defparameter news20-scw (make-one-vs-one news20-dim news20-class 'sparse-scw 0.9 1.0))
 
 (loop repeat 10 do
   (train news20-scw news20-train)

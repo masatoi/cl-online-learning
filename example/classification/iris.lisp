@@ -26,19 +26,20 @@
 ;; Perceptron, 1 vs 1
 (defparameter mul-percep (make-one-vs-rest iris-dim iris-class 'perceptron))
 
-(loop repeat 2 do (train mul-percep iris))
-(test mul-percep iris)
+(loop repeat 2 do
+  (train mul-percep iris)
+  (test mul-percep iris-test))
 ;; Accuracy: 94.0%, Correct: 141, Total: 150
 
 ;; AROW, 1 vs rest
-(defparameter mul-arow-1vr (make-one-vs-rest iris-dim iris-class 'arow 0.1d0))
+(defparameter mul-arow-1vr (make-one-vs-rest iris-dim iris-class 'arow 0.1))
 (train mul-arow-1vr iris-train)
 (test mul-arow-1vr iris-test)
-;; Accuracy: 94.0%, Correct: 47, Total: 50
+;; Accuracy: 96.0%, Correct: 48, Total: 50
 
 ;; AROW, 1 vs 1
-(defparameter mul-arow-1v1 (make-one-vs-one iris-dim iris-class 'arow 0.1d0))
+(defparameter mul-arow-1v1 (make-one-vs-one iris-dim iris-class 'arow 0.1))
 (train mul-arow-1v1 iris-train)
 (test mul-arow-1v1 iris-test)
 
-;; Accuracy: 94.0%, Correct: 47, Total: 50
+;; Accuracy: 96.0%, Correct: 48, Total: 50
