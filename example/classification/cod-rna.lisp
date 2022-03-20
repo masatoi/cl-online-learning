@@ -27,26 +27,26 @@
 (defparameter cod-rna.scale (read-data "/home/wiz/datasets/cod-rna.scale" cod-rna-dim))
 (defparameter cod-rna.t.scale (read-data "/home/wiz/datasets/cod-rna.t.scale" cod-rna-dim))
 
-(defparameter cod-rna-arow (make-arow cod-rna-dim 10d0))
+(defparameter cod-rna-arow (make-arow cod-rna-dim 10.0))
 (time (loop repeat 20 do (train cod-rna-arow cod-rna)))
 (test cod-rna-arow cod-rna.t)
 
-(defparameter cod-rna-arow (make-arow cod-rna-dim 0.1d0))
+(defparameter cod-rna-arow (make-arow cod-rna-dim 0.1))
 (loop repeat 20 do
   (train cod-rna-arow cod-rna)
   (test cod-rna-arow cod-rna.t))
 
-(defparameter cod-rna-sgd (make-lr+sgd cod-rna-dim 0.000000001d0 0.001d0))
+(defparameter cod-rna-sgd (make-lr+sgd cod-rna-dim 0.000000001 0.001))
 (loop repeat 20 do
   (train cod-rna-sgd cod-rna)
   (test cod-rna-sgd cod-rna.t))
 
-(defparameter cod-rna-adam (make-lr+adam cod-rna-dim 0.00000000000000000001d0 0.001d0 1.d-8 0.9d0 0.99d0))
+(defparameter cod-rna-adam (make-lr+adam cod-rna-dim 0.00000000000000000001 0.001 1.e-8 0.9 0.99))
 (loop repeat 20 do
   (train cod-rna-adam cod-rna)
   (test cod-rna-adam cod-rna.t))
 
-(defparameter cod-rna-scw (make-scw cod-rna-dim 0.9d0 0.1d0))
+(defparameter cod-rna-scw (make-scw cod-rna-dim 0.9 0.1))
 (loop repeat 20 do
   (train cod-rna-scw cod-rna)
   (test cod-rna-scw cod-rna.t))
@@ -79,7 +79,7 @@
 
 ;; it seem require scaling => use libsvm scaling
 
-(defparameter cod-rna-arow.sp (make-sparse-arow cod-rna-dim 10d0))
+(defparameter cod-rna-arow.sp (make-sparse-arow cod-rna-dim 10.0))
 (time (loop repeat 20 do (train cod-rna-arow.sp cod-rna.sp)))
 (test cod-rna-arow.sp cod-rna.t.sp)
 

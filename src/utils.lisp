@@ -24,23 +24,23 @@
 ;;; using cl-libsvm-format
 
 (defun read-datum (svmformat-datum data-dimension &key multiclass-p)
-  (let* ((input-vector (make-array data-dimension :element-type 'double-float :initial-element 0d0))
+  (let* ((input-vector (make-array data-dimension :element-type 'single-float :initial-element 0.0))
          (training-label (if multiclass-p
                              (1- (car svmformat-datum))
-                             (coerce (car svmformat-datum) 'double-float))))
+                             (coerce (car svmformat-datum) 'single-float))))
     (labels ((iter (data)
                (if (null data)
                    input-vector
                    (progn
                      (setf (aref input-vector (1- (car data)))
-                           (coerce (cadr data) 'double-float))
+                           (coerce (cadr data) 'single-float))
                      (iter (cddr data))))))
       (cons training-label (iter (cdr svmformat-datum))))))
 
 (defun read-datum-sparse (svmformat-datum &key multiclass-p)
   (let* ((training-label (if multiclass-p
                              (1- (car svmformat-datum))
-                             (coerce (car svmformat-datum) 'double-float)))
+                             (coerce (car svmformat-datum) 'single-float)))
          (sparse-dim (/ (length (cdr svmformat-datum)) 2))
          (input-vector (make-empty-sparse-vector sparse-dim)))
     (labels ((iter (i data)
@@ -50,7 +50,7 @@
                      (setf (aref (sparse-vector-index-vector input-vector) i)
                            (1- (car data))
                            (aref (sparse-vector-value-vector input-vector) i)
-                           (coerce (cadr data) 'double-float))
+                           (coerce (cadr data) 'single-float))
                      (iter (1+ i) (cddr data))))))
       (cons training-label (iter 0 (cdr svmformat-datum))))))
 
@@ -78,16 +78,16 @@
 (defun mean-vector (dataset)
   (let* ((datum-dim (length (cdr (elt dataset 0))))
          (data-size (length dataset))
-	 (sum-vec (make-dvec datum-dim 0d0)))
+	 (sum-vec (make-vec datum-dim 0.0)))
     (doseq (datum dataset)
       (v+ (cdr datum) sum-vec sum-vec))
-    (v*n sum-vec (/ 1d0 data-size) sum-vec)
+    (v*n sum-vec (/ 1.0 data-size) sum-vec)
     sum-vec))
 
 (defun standard-deviation-vector (dataset)
   (let* ((datum-dim (length (cdr (elt dataset 0))))
 	 (data-size (length dataset))
-	 (sum-vec (make-dvec datum-dim 0d0))
+	 (sum-vec (make-vec datum-dim 0.0))
 	 (ave-vec (mean-vector dataset)))
     (doseq (datum dataset)
       (loop for i from 0 to (1- datum-dim) do
@@ -100,10 +100,10 @@
 ;; (defun min-max-vector (training-vector)
 ;;   (let* ((data-dim (1- (array-dimension (aref training-vector 0) 0)))
 ;; 	 (data-size (length training-vector))
-;; 	 (max-v (make-array data-dim :element-type 'double-float :initial-element 0d0))
-;; 	 (min-v (make-array data-dim :element-type 'double-float :initial-element 0d0))
-;; 	 (cent-v (make-array data-dim :element-type 'double-float :initial-element 0d0))
-;; 	 (scale-v (make-array data-dim :element-type 'double-float :initial-element 0d0)))
+;; 	 (max-v (make-array data-dim :element-type 'single-float :initial-element 0.0))
+;; 	 (min-v (make-array data-dim :element-type 'single-float :initial-element 0.0))
+;; 	 (cent-v (make-array data-dim :element-type 'single-float :initial-element 0.0))
+;; 	 (scale-v (make-array data-dim :element-type 'single-float :initial-element 0.0)))
 ;;     ;; init
 ;;     (loop for j from 0 to (1- data-dim) do
 ;;       (let ((elem-0j (aref (aref training-vector 0) j)))
@@ -117,10 +117,10 @@
 ;; 	  (when (> (aref min-v j) elem-ij) (setf (aref min-v j) elem-ij)))))
 ;;     ;; calc cent-v, scale-v
 ;;     (loop for j from 0 to (1- data-dim) do
-;;       (setf (aref cent-v j) (/ (+ (aref max-v j) (aref min-v j)) 2.0d0)
+;;       (setf (aref cent-v j) (/ (+ (aref max-v j) (aref min-v j)) 2.0)
 ;; 	    (aref scale-v j) (if (= (aref max-v j) (aref min-v j))
-;; 			       1d0
-;; 			       (/ (abs (- (aref max-v j) (aref min-v j))) 2d0))))
+;; 			       1.0
+;; 			       (/ (abs (- (aref max-v j) (aref min-v j))) 2.0))))
 ;;     (values cent-v scale-v)))
 
 ;; (defclass scale-parameters ()
@@ -148,7 +148,7 @@
 ;; 	 (cent-v (centre-vector-of scale-parameters))
 ;; 	 (scale-v (scale-vector-of scale-parameters)))
 ;;     (loop for i from 0 to (1- data-size) do
-;;       (let ((new-data-v (make-array (1+ data-dim) :element-type 'double-float :initial-element 0d0))
+;;       (let ((new-data-v (make-array (1+ data-dim) :element-type 'single-float :initial-element 0.0))
 ;; 	    (data-v (aref training-vector i)))
 ;; 	(loop for j from 0 to (1- data-dim) do	  
 ;; 	  (setf (aref new-data-v j) (/ (- (aref data-v j) (aref cent-v j)) (aref scale-v j))))
@@ -160,7 +160,7 @@
 ;; ;; and target column will be ignored in this function.
 ;; (defun autoscale-datum (datum scale-parameters)
 ;;   (let* ((datum-dim (length datum))
-;; 	 (new-datum (make-array datum-dim :element-type 'double-float))
+;; 	 (new-datum (make-array datum-dim :element-type 'single-float))
 ;; 	 (cent-v (centre-vector-of scale-parameters))
 ;; 	 (scale-v (scale-vector-of scale-parameters)))
 ;;     (loop for i from 0 to (- datum-dim 2) do
@@ -182,7 +182,7 @@
 ;; (defun average (list)
 ;;   (/ (loop for i in list sum i) (length list)))
 
-;; (defun cross-validation (n training-vector kernel &key (c 10) (weight 1.0d0))
+;; (defun cross-validation (n training-vector kernel &key (c 10) (weight 1.0))
 ;;   (let* ((bin-size (truncate (length training-vector) n))
 ;; 	 (sub-training-vector (make-array (- (length training-vector) bin-size)))
 ;; 	 (sub-test-vector (make-array bin-size))
@@ -304,4 +304,4 @@
      (float x)
      (integer x)
      (string (svmformat::parse-float x)))
-   'double-float))
+   'single-float))

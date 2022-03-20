@@ -15,17 +15,23 @@
 (defparameter news20.binary-dim 1355191)
 (defparameter news20.binary
   (read-data "/home/wiz/datasets/news20.binary" news20.binary-dim :sparse-p t))
-(defparameter news20.binary.arow (make-sparse-arow news20.binary-dim 10d0))
-(time (loop repeat 20 do (train news20.binary.arow news20.binary)))
-(test news20.binary.arow news20.binary)
-
-(defparameter news20.binary.lr+sgd (make-sparse-lr+sgd news20.binary-dim 0.00001d0 0.01d0))
-(time (loop repeat 20 do (train news20.binary.lr+sgd news20.binary)))
-
 (defparameter news20.binary-train (subseq news20.binary 0 15000))
 (defparameter news20.binary-test (subseq news20.binary 15000 19996))
 
-(defparameter news20.binary.lr+sgd (make-sparse-sgd news20.binary-dim 0.00001d0 0.01d0))
+(defparameter news20.binary.arow (make-sparse-arow news20.binary-dim 10.0))
+(time
+ (loop repeat 20 do
+   (train news20.binary.arow news20.binary-train)
+   (test news20.binary.arow news20.binary-test)))
+
+(defparameter news20.binary.lr+sgd (make-sparse-lr+sgd news20.binary-dim 0.00001 0.01))
+(time (loop repeat 20 do (train news20.binary.lr+sgd news20.binary)))
+
+
+
+(defparameter news20.binary.lr+sgd (make-sparse-sgd news20.binary-dim 0.00001 0.01))
+
+
 
 (progn
   (sparse-sgd-update news20.binary.lr+sgd (cdar news20.binary-train) (caar news20.binary-train))

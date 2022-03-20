@@ -22,7 +22,7 @@ exec ros -Q -- $0 "$@"
                      (format t "Loading dataset~%")
                      (read-data test-set-file (dim-of learner) :multiclass-p multiclass-p :sparse-p sparse-p)))
          (min/max-cls (class-min/max test-set)))
-    ;; Set target to -1d0/1d0 (binary) or integer starting from 0 (multiclass)
+    ;; Set target to -1/1 (binary) or integer starting from 0 (multiclass)
     (when multiclass-p
       (loop for datum in test-set do
         (setf (car datum) (- (car datum) (car min/max-cls)))))
