@@ -32,15 +32,17 @@
         (,(intern (catstr (symbol-name learner-type) "-WEIGHT")) learner)
         (,(intern (catstr (symbol-name learner-type) "-BIAS")) learner)))
      (defun ,(intern (catstr (symbol-name learner-type) "-TEST"))
-         (learner test-data &key (quiet-p nil))
+         (learner test-data &key (quiet-p nil) (stream nil))
        (flet ((square (x) (* x x)))
          (let* ((len (length test-data))
                 (sum-square-error
                   (reduce #'+
                           (mapcar (lambda (datum)
-                                    (square (- (,(intern (catstr (symbol-name learner-type) "-PREDICT"))
-                                                learner (cdr datum))
-                                               (car datum))))
+                                    (let ((predict (,(intern (catstr (symbol-name learner-type) "-PREDICT"))
+                                                    learner (cdr datum))))
+                                      (when stream
+                                        (format stream "~A~%" predict))
+                                      (square (- predict (car datum)))))
                                   test-data)))
                 (rmse (sqrt (/ sum-square-error len))))
            (if (not quiet-p)

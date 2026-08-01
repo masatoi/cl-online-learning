@@ -887,5 +887,30 @@
     '(76.666664 115 150)
     :test #'approximately-equal)
 
+;;;;;;;;;;;;;;;; Regression ;;;;;;;;;;;;;;;;;
+(format t ";;;;;;;;;;;;;;;; Regression ;;;;;;;;;;;;;;;;;~%")
+
+;;; RLS learner
+(format t ";;; RLS learner~%")
+(defvar rls-learner)
+
+;; CLOL:TEST passes :QUIET-P and :STREAM to <TYPE>-TEST, so a regression
+;; learner must accept both -- otherwise CLOL:TEST and CLOL-PREDICT are
+;; unusable for RLS.
+(is (progn
+      (setf rls-learner (make-rls a1a-dim 1.0))
+      (train rls-learner a1a)
+      (test rls-learner a1a :quiet-p t))
+    0.6596754
+    :test #'approximately-equal)
+
+;; :STREAM receives one predicted value per test datum.
+(is (let ((out (make-string-output-stream)))
+      (test rls-learner a1a :quiet-p t :stream out)
+      (length (uiop:split-string (string-right-trim '(#\Newline)
+                                                    (get-output-stream-string out))
+                                 :separator '(#\Newline))))
+    (length a1a))
+
 ;;; ende
 (finalize)
