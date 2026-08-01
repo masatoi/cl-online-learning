@@ -794,3 +794,82 @@
       (ok (approximately-equal (test learner a1a :quiet-p t)
                                (test restored a1a :quiet-p t)))
       (ok (progn (train restored a1a) t)))))
+
+;;; Metadata accessors
+;;;
+;;; CLOL-PREDICT calls these three on a restored model to decide how to read
+;;; the test file: N-CLASS-OF > 2 selects multiclass label handling,
+;;; SPARSE-LEARNER? selects the sparse reader, DIM-OF gives the width.  Get one
+;;; wrong and the tool silently reads the dataset the wrong way.
+
+(deftest metadata-of-binary-learners
+  (ok (= (dim-of (make-perceptron a1a-dim)) a1a-dim))
+  (ok (= (n-class-of (make-perceptron a1a-dim)) 2))
+  (ok (null (sparse-learner? (make-perceptron a1a-dim))))
+  (ok (sparse-learner? (make-sparse-perceptron a1a-dim)))
+  ;; A sparse learner stores its weight as a full-length dense vector, so
+  ;; DIM-OF reads the same width for both representations.
+  (ok (= (dim-of (make-sparse-perceptron a1a-dim)) a1a-dim)))
+
+(deftest metadata-of-multiclass-learners
+  (let ((ovr (make-one-vs-rest iris-dim 3 'scw 0.9 0.1))
+        (ovo (make-one-vs-one iris-dim 3 'sparse-arow 10)))
+    ;; Both read through to the first sub-learner, not the wrapper.
+    (ok (= (dim-of ovr) iris-dim))
+    (ok (= (dim-of ovo) iris-dim))
+    (ok (= (n-class-of ovr) 3))
+    (ok (= (n-class-of ovo) 3))
+    (ok (null (sparse-learner? ovr)))
+    (ok (sparse-learner? ovo))))
+
+(deftest metadata-of-regression-learners
+  (ok (= (dim-of (make-rls a1a-dim 1.0)) a1a-dim))
+  ;; A regression learner has no classes; N-CLASS-OF falls through to 2, which
+  ;; is what keeps CLOL-PREDICT on the binary (non-multiclass) reader path.
+  (ok (= (n-class-of (make-rls a1a-dim 1.0)) 2))
+  (ok (null (sparse-learner? (make-rls a1a-dim 1.0))))
+  (ok (sparse-learner? (make-sparse-rls a1a-dim 1.0))))
+
+;;; The classifier :STREAM path
+;;;
+;;; REGRESSION-RLS covers :STREAM for regression.  This covers it for
+;;; classifiers, which is what CLOL-PREDICT actually emits: the rounded sign
+;;; for a binary learner, the class index for a multiclass one.
+
+(defun test-output-lines (learner data)
+  "Return the lines LEARNER's -TEST writes to :STREAM over DATA."
+  (let ((out (make-string-output-stream)))
+    (test learner data :quiet-p t :stream out)
+    (uiop:split-string (string-right-trim '(#\Newline) (get-output-stream-string out))
+                       :separator '(#\Newline))))
+
+(deftest binary-test-stream
+  (let* ((learner (make-arow a1a-dim 10))
+         (lines (progn (train learner a1a) (test-output-lines learner a1a))))
+    (ok (= (length lines) (length a1a)))
+    ;; A binary learner predicts +-1, and -TEST rounds before printing.
+    (ok (null (set-difference (remove-duplicates lines :test #'string=)
+                              '("-1" "1") :test #'string=)))
+    (ok (equal (mapcar #'read-from-string (subseq lines 0 5))
+               (mapcar (lambda (datum) (round (clol::arow-predict learner (cdr datum))))
+                       (subseq a1a 0 5))))))
+
+(deftest multiclass-test-stream
+  (let* ((learner (make-one-vs-rest iris-dim 3 'arow 10))
+         (lines (progn (train learner iris) (test-output-lines learner iris))))
+    (ok (= (length lines) (length iris)))
+    ;; Multiclass predictions are class indices 0..K-1, NOT the original LIBSVM
+    ;; labels -- iris.scale is labelled 1..3 and READ-DATA subtracted one.
+    (ok (null (set-difference (remove-duplicates lines :test #'string=)
+                              '("0" "1" "2") :test #'string=)))
+    (ok (equal (mapcar #'read-from-string (subseq lines 0 5))
+               (mapcar (lambda (datum) (round (one-vs-rest-predict learner (cdr datum))))
+                       (subseq iris 0 5))))))
+
+(deftest sparse-test-stream
+  (let* ((learner (make-sparse-scw a1a-dim 0.8 0.1))
+         (lines (progn (train learner a1a.sp) (test-output-lines learner a1a.sp))))
+    (ok (= (length lines) (length a1a.sp)))
+    (ok (equal (mapcar #'read-from-string (subseq lines 0 5))
+               (mapcar (lambda (datum) (round (clol::sparse-scw-predict learner (cdr datum))))
+                       (subseq a1a.sp 0 5))))))
