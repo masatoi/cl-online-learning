@@ -1296,3 +1296,58 @@
         (error () t)))
   (ok (handler-case (progn (make-lr+ftrl a1a-dim 0.1 1.0 -1.0 1.0) nil)
         (error () t))))
+
+(defun sparse-ftrl-cache-mismatches (learner)
+  "Count coordinates where LEARNER's cached WEIGHT differs from a freshly derived w."
+  (let ((w (clol::sparse-lr+ftrl-weight learner))
+        (z (clol::sparse-lr+ftrl-z learner))
+        (n (clol::sparse-lr+ftrl-n learner))
+        (mismatch 0))
+    (dotimes (i (length w) mismatch)
+      (unless (= (aref w i)
+                 (clol::ftrl-weight-of (aref z i) (aref n i)
+                                       (clol::sparse-lr+ftrl-alpha learner)
+                                       (clol::sparse-lr+ftrl-beta learner)
+                                       (clol::sparse-lr+ftrl-lambda1 learner)
+                                       (clol::sparse-lr+ftrl-lambda2 learner)))
+        (incf mismatch)))))
+
+(deftest sparse-lr+ftrl-weight-cache-invariant
+  (let ((learner (make-sparse-lr+ftrl a1a-dim 0.1 1.0 2.0 1.0)))
+    (dotimes (i 5) (train learner a1a.sp))
+    (ok (= (sparse-ftrl-cache-mismatches learner) 0))))
+
+(deftest lr+ftrl-dense-sparse-agree
+  ;; Identical arithmetic, different traversal: the dense loop visits every dimension,
+  ;; the sparse one only the non-zeros.  On a zero coordinate the dense update is a
+  ;; no-op -- g is 0, so z and n do not move and the refreshed w recomputes to the same
+  ;; value -- so the two must agree exactly.  The code paths are independent, which
+  ;; makes this a real check on the update rule rather than a restatement of the
+  ;; golden values that follow.
+  (let ((dense (make-lr+ftrl a1a-dim 0.1 1.0 1.0 1.0))
+        (sparse (make-sparse-lr+ftrl a1a-dim 0.1 1.0 1.0 1.0)))
+    (train dense a1a)
+    (train sparse a1a.sp)
+    (ok (approximately-equal (clol::lr+ftrl-weight dense)
+                             (clol::sparse-lr+ftrl-weight sparse)))
+    (ok (approximately-equal (clol::lr+ftrl-z dense)
+                             (clol::sparse-lr+ftrl-z sparse)))
+    (ok (approximately-equal (clol::lr+ftrl-n dense)
+                             (clol::sparse-lr+ftrl-n sparse)))
+    (ok (approximately-equal (clol::lr+ftrl-bias dense)
+                             (clol::sparse-lr+ftrl-bias sparse)))
+    (ok (approximately-equal (test dense a1a :quiet-p t)
+                             (test sparse a1a.sp :quiet-p t)))))
+
+(deftest sparse-lr+ftrl-learns-a1a
+  (let ((learner (make-sparse-lr+ftrl a1a-dim 0.1 1.0 1.0 1.0)))
+    (dotimes (i 10) (train learner a1a.sp))
+    (ok (> (test learner a1a.sp :quiet-p t) 80.0))))
+
+(deftest metadata-of-sparse-lr+ftrl
+  (let ((learner (make-sparse-lr+ftrl a1a-dim 0.1 1.0 1.0 1.0)))
+    ;; A sparse learner stores its weight as a full-length dense vector, so DIM-OF
+    ;; reads the same width for both representations.
+    (ok (= (dim-of learner) a1a-dim))
+    (ok (= (n-class-of learner) 2))
+    (ok (sparse-learner? learner))))
