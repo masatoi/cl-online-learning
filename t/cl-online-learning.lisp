@@ -705,3 +705,294 @@
                                 (clol::sparse-rls-predict learner (cdr (second a1a.sp)))))
       (ok (approximately-equal (read-from-string (third lines))
                                 (clol::sparse-rls-predict learner (cdr (third a1a.sp))))))))
+
+;;;; ------------------------------------------------------------------------
+;;;; API that the golden-value tests above never reach
+;;;;
+;;;; Everything above asserts learned weights.  What follows covers the parts
+;;;; of the exported API those assertions never execute: serialization, the
+;;;; metadata accessors CLOL-PREDICT dispatches on, the classifier :STREAM
+;;;; path, the CLI helpers in CLOL.UTILS, and the two roswell scripts.
+
+;;; Serialization
+;;;
+;;; ONE-VS-REST and ONE-VS-ONE cache function objects in struct slots, which
+;;; CL-STORE cannot serialize; SAVE nulls them, stores, then re-resolves, and
+;;; RESTORE re-resolves after loading.  A learner that survives the round trip
+;;; but cannot train afterwards is the failure mode that guards -- so every
+;;; round-trip test below trains the restored learner, not just tests it.
+
+(defun round-trip (learner)
+  "Save LEARNER to a temporary file and return the restored copy."
+  (uiop:with-temporary-file (:pathname path :prefix "clol-test-" :type "model")
+    (save learner path)
+    (restore path)))
+
+(deftest save-restore-binary-dense
+  (let ((learner (make-arow a1a-dim 10)))
+    (train learner a1a)
+    (let ((restored (round-trip learner)))
+      (ok (eq (type-of restored) 'clol::arow))
+      (ok (equalp (clol::arow-weight learner) (clol::arow-weight restored)))
+      (ok (= (clol::arow-bias learner) (clol::arow-bias restored)))
+      (ok (equal (multiple-value-list (test learner a1a :quiet-p t))
+                 (multiple-value-list (test restored a1a :quiet-p t))))
+      (ok (progn (train restored a1a) t)))))
+
+(deftest save-restore-binary-sparse
+  (let ((learner (make-sparse-scw a1a-dim 0.8 0.1)))
+    (train learner a1a.sp)
+    (let ((restored (round-trip learner)))
+      (ok (eq (type-of restored) 'clol::sparse-scw))
+      (ok (equalp (clol::sparse-scw-weight learner) (clol::sparse-scw-weight restored)))
+      (ok (equal (multiple-value-list (test learner a1a.sp :quiet-p t))
+                 (multiple-value-list (test restored a1a.sp :quiet-p t))))
+      (ok (progn (train restored a1a.sp) t)))))
+
+(deftest save-restore-one-vs-rest
+  (let ((learner (make-one-vs-rest iris-dim 3 'scw 0.9 0.1)))
+    (train learner iris)
+    (let ((restored (round-trip learner)))
+      (ok (eq (type-of restored) 'clol::one-vs-rest))
+      (ok (= (n-class-of learner) (n-class-of restored)))
+      (ok (equalp (clol::scw-weight (aref (clol::one-vs-rest-learners-vector learner) 0))
+                  (clol::scw-weight (aref (clol::one-vs-rest-learners-vector restored) 0))))
+      (ok (equal (multiple-value-list (test learner iris :quiet-p t))
+                 (multiple-value-list (test restored iris :quiet-p t))))
+      ;; Fails if SAVE left a function slot null, or RESTORE did not re-resolve it.
+      (ok (progn (train restored iris) t)))))
+
+(deftest save-restore-one-vs-one
+  (let ((learner (make-one-vs-one iris-dim 3 'arow 10)))
+    (train learner iris)
+    (let ((restored (round-trip learner)))
+      (ok (eq (type-of restored) 'clol::one-vs-one))
+      (ok (equalp (clol::arow-weight (aref (clol::one-vs-one-learners-vector learner) 0))
+                  (clol::arow-weight (aref (clol::one-vs-one-learners-vector restored) 0))))
+      (ok (equal (multiple-value-list (test learner iris :quiet-p t))
+                 (multiple-value-list (test restored iris :quiet-p t))))
+      (ok (progn (train restored iris) t)))))
+
+(deftest save-restore-multiclass-sparse
+  (let ((learner (make-one-vs-one iris-dim 3 'sparse-arow 10)))
+    (train learner iris.sp)
+    (let ((restored (round-trip learner)))
+      (ok (equalp (clol::sparse-arow-weight
+                   (aref (clol::one-vs-one-learners-vector learner) 0))
+                  (clol::sparse-arow-weight
+                   (aref (clol::one-vs-one-learners-vector restored) 0))))
+      (ok (equal (multiple-value-list (test learner iris.sp :quiet-p t))
+                 (multiple-value-list (test restored iris.sp :quiet-p t))))
+      (ok (progn (train restored iris.sp) t)))))
+
+(deftest save-restore-regression
+  (let ((learner (make-rls a1a-dim 1.0)))
+    (train learner a1a)
+    (let ((restored (round-trip learner)))
+      (ok (eq (type-of restored) 'clol::rls))
+      (ok (equalp (clol::rls-weight learner) (clol::rls-weight restored)))
+      (ok (approximately-equal (test learner a1a :quiet-p t)
+                               (test restored a1a :quiet-p t)))
+      (ok (progn (train restored a1a) t)))))
+
+;;; Metadata accessors
+;;;
+;;; CLOL-PREDICT calls these three on a restored model to decide how to read
+;;; the test file: N-CLASS-OF > 2 selects multiclass label handling,
+;;; SPARSE-LEARNER? selects the sparse reader, DIM-OF gives the width.  Get one
+;;; wrong and the tool silently reads the dataset the wrong way.
+
+(deftest metadata-of-binary-learners
+  (ok (= (dim-of (make-perceptron a1a-dim)) a1a-dim))
+  (ok (= (n-class-of (make-perceptron a1a-dim)) 2))
+  (ok (null (sparse-learner? (make-perceptron a1a-dim))))
+  (ok (sparse-learner? (make-sparse-perceptron a1a-dim)))
+  ;; A sparse learner stores its weight as a full-length dense vector, so
+  ;; DIM-OF reads the same width for both representations.
+  (ok (= (dim-of (make-sparse-perceptron a1a-dim)) a1a-dim)))
+
+(deftest metadata-of-multiclass-learners
+  (let ((ovr (make-one-vs-rest iris-dim 3 'scw 0.9 0.1))
+        (ovo (make-one-vs-one iris-dim 3 'sparse-arow 10)))
+    ;; Both read through to the first sub-learner, not the wrapper.
+    (ok (= (dim-of ovr) iris-dim))
+    (ok (= (dim-of ovo) iris-dim))
+    (ok (= (n-class-of ovr) 3))
+    (ok (= (n-class-of ovo) 3))
+    (ok (null (sparse-learner? ovr)))
+    (ok (sparse-learner? ovo))))
+
+(deftest metadata-of-regression-learners
+  (ok (= (dim-of (make-rls a1a-dim 1.0)) a1a-dim))
+  ;; A regression learner has no classes; N-CLASS-OF falls through to 2, which
+  ;; is what keeps CLOL-PREDICT on the binary (non-multiclass) reader path.
+  (ok (= (n-class-of (make-rls a1a-dim 1.0)) 2))
+  (ok (null (sparse-learner? (make-rls a1a-dim 1.0))))
+  (ok (sparse-learner? (make-sparse-rls a1a-dim 1.0))))
+
+;;; The classifier :STREAM path
+;;;
+;;; REGRESSION-RLS covers :STREAM for regression.  This covers it for
+;;; classifiers, which is what CLOL-PREDICT actually emits: the rounded sign
+;;; for a binary learner, the class index for a multiclass one.
+
+(defun test-output-lines (learner data)
+  "Return the lines LEARNER's -TEST writes to :STREAM over DATA."
+  (let ((out (make-string-output-stream)))
+    (test learner data :quiet-p t :stream out)
+    (uiop:split-string (string-right-trim '(#\Newline) (get-output-stream-string out))
+                       :separator '(#\Newline))))
+
+(deftest binary-test-stream
+  (let* ((learner (make-arow a1a-dim 10))
+         (lines (progn (train learner a1a) (test-output-lines learner a1a))))
+    (ok (= (length lines) (length a1a)))
+    ;; A binary learner predicts +-1, and -TEST rounds before printing.
+    (ok (null (set-difference (remove-duplicates lines :test #'string=)
+                              '("-1" "1") :test #'string=)))
+    (ok (equal (mapcar #'read-from-string (subseq lines 0 5))
+               (mapcar (lambda (datum) (round (clol::arow-predict learner (cdr datum))))
+                       (subseq a1a 0 5))))))
+
+(deftest multiclass-test-stream
+  (let* ((learner (make-one-vs-rest iris-dim 3 'arow 10))
+         (lines (progn (train learner iris) (test-output-lines learner iris))))
+    (ok (= (length lines) (length iris)))
+    ;; Multiclass predictions are class indices 0..K-1, NOT the original LIBSVM
+    ;; labels -- iris.scale is labelled 1..3 and READ-DATA subtracted one.
+    (ok (null (set-difference (remove-duplicates lines :test #'string=)
+                              '("0" "1" "2") :test #'string=)))
+    (ok (equal (mapcar #'read-from-string (subseq lines 0 5))
+               (mapcar (lambda (datum) (round (one-vs-rest-predict learner (cdr datum))))
+                       (subseq iris 0 5))))))
+
+(deftest sparse-test-stream
+  (let* ((learner (make-sparse-scw a1a-dim 0.8 0.1))
+         (lines (progn (train learner a1a.sp) (test-output-lines learner a1a.sp))))
+    (ok (= (length lines) (length a1a.sp)))
+    (ok (equal (mapcar #'read-from-string (subseq lines 0 5))
+               (mapcar (lambda (datum) (round (clol::sparse-scw-predict learner (cdr datum))))
+                       (subseq a1a.sp 0 5))))))
+
+;;; CLOL.UTILS
+;;;
+;;; Nothing in the library calls these -- they exist for the roswell scripts,
+;;; which parse every option as a string and must coerce it.
+
+(deftest utils-to-int
+  (ok (= (to-int "42") 42))
+  (ok (= (to-int "-7") -7))
+  ;; A float-valued string truncates rather than erroring, which is what lets
+  ;; -n-epoch 3.0 work.
+  (ok (= (to-int "3.9") 3))
+  (ok (= (to-int 5) 5))
+  (ok (= (to-int 5.9) 5)))
+
+(deftest utils-to-float
+  (ok (approximately-equal (to-float "1.5") 1.5))
+  (ok (approximately-equal (to-float "-0.25") -0.25))
+  (ok (approximately-equal (to-float "2") 2.0))
+  (ok (approximately-equal (to-float 3) 3.0))
+  ;; Every parameter in this library is a single-float; a double would break
+  ;; the type declarations the update bodies compile under.
+  (ok (typep (to-float "1.5") 'single-float))
+  (ok (typep (to-float 3) 'single-float)))
+
+(deftest utils-class-min/max
+  ;; CLOL-TRAIN shifts labels by the minimum this reports, so a wrong minimum
+  ;; silently renumbers every class.
+  (ok (equal (class-min/max iris) '(0 2)))
+  (ok (equal (class-min/max a1a) '(-1.0 1.0)))
+  (ok (equal (class-min/max '((3 . nil) (1 . nil) (2 . nil))) '(1 3))))
+
+(deftest utils-shuffle-vector
+  (let* ((original (coerce '(1 2 3 4 5 6 7 8 9 10) 'simple-vector))
+         (shuffled (shuffle-vector (copy-seq original))))
+    ;; Shuffling is in place and returns the same vector it was given.
+    (ok (= (length shuffled) (length original)))
+    (ok (equal (sort (coerce shuffled 'list) #'<) (coerce original 'list)))
+    (let ((v (coerce '(1 2 3) 'simple-vector)))
+      (ok (eq (shuffle-vector v) v)))))
+
+;;; The roswell scripts
+;;;
+;;; CLOL-TRAIN and CLOL-PREDICT are the library's only user-facing programs and
+;;; the only place DEFMAIN's option parsing runs.  Driving them as subprocesses
+;;; is the sole way to cover that; each pair of runs costs about a second.
+;;;
+;;; Note both scripts train and predict on the same file -- these assert that
+;;; the pipeline runs end to end and emits well-formed predictions, not that
+;;; the model generalizes.
+
+(defun roswell-available-p ()
+  (handler-case
+      (zerop (nth-value 2 (uiop:run-program '("ros" "--version")
+                                            :output nil :error-output nil
+                                            :ignore-error-status t)))
+    (error () nil)))
+
+(defun run-script (name &rest args)
+  "Run the roswell script NAME with ARGS, returning its exit code, stdout and stderr."
+  (multiple-value-bind (out err code)
+      (uiop:run-program
+       (list* "ros"
+              (namestring (dataset-path (make-pathname :directory '(:relative "roswell")
+                                                       :name name :type "ros")))
+              args)
+       :output :string :error-output :string :ignore-error-status t)
+    (values code out err)))
+
+(defun file-size (path)
+  (if (probe-file path)
+      (with-open-file (s path :element-type '(unsigned-byte 8)) (file-length s))
+      0))
+
+;;; DEFMAIN wraps every script body in a HANDLER-CASE that prints the condition and
+;;; returns normally, so a failing script still exits 0 -- the exit code cannot
+;;; distinguish a working run from a broken one.  Both of its handlers do print the
+;;; usage text to standard output, and a successful run never does, so that is the
+;;; marker to assert on.  Not an empty stderr: that would couple these tests to every
+;;; compile-time style-warning the subprocess happens to emit.
+;;;
+;;; Likewise UIOP:WITH-TEMPORARY-FILE creates its file up front, so PROBE-FILE on the
+;;; model proves nothing; its size is what proves SAVE ran.
+
+(defun ok-script-run (name &rest args)
+  "Run script NAME, asserting it exited cleanly and did not print its usage text."
+  (multiple-value-bind (code stdout stderr) (apply #'run-script name args)
+    (ok (zerop code))
+    (ok (not (search "Usage:" stdout)) (format nil "~A printed no usage text" name))
+    ;; Surfaced only on failure, so the condition DEFMAIN swallowed is visible.
+    (ok (not (search "Error:" stderr)) (format nil "~A signalled no error" name))))
+
+(deftest command-line-tools-binary
+  (if (not (roswell-available-p))
+      (skip "roswell is not on PATH")
+      (uiop:with-temporary-file (:pathname model :prefix "clol-cli-" :type "model")
+        (uiop:with-temporary-file (:pathname out :prefix "clol-cli-" :type "out")
+          (let ((dataset (namestring (dataset-path #P"t/dataset/a1a"))))
+            (ok-script-run "clol-train" "-dim" "123" "-n-epoch" "1"
+                           dataset (namestring model))
+            (ok (plusp (file-size model)))
+            (ok-script-run "clol-predict" dataset (namestring model) (namestring out))
+            (let ((lines (uiop:read-file-lines out)))
+              (ok (= (length lines) (length a1a)))
+              ;; A binary model emits the rounded sign, nothing else.
+              (ok (null (set-difference (remove-duplicates lines :test #'string=)
+                                        '("-1" "1") :test #'string=)))))))))
+
+(deftest command-line-tools-multiclass
+  (if (not (roswell-available-p))
+      (skip "roswell is not on PATH")
+      (uiop:with-temporary-file (:pathname model :prefix "clol-cli-" :type "model")
+        (uiop:with-temporary-file (:pathname out :prefix "clol-cli-" :type "out")
+          (let ((dataset (namestring (dataset-path #P"t/dataset/iris.scale"))))
+            (ok-script-run "clol-train" "-dim" "4" "-n-class" "3" "-n-epoch" "5"
+                           dataset (namestring model))
+            (ok (plusp (file-size model)))
+            (ok-script-run "clol-predict" dataset (namestring model) (namestring out))
+            (let ((lines (uiop:read-file-lines out)))
+              (ok (= (length lines) (length iris)))
+              ;; Class indices 0..K-1, not iris.scale's original 1..3 labels.
+              (ok (null (set-difference (remove-duplicates lines :test #'string=)
+                                        '("0" "1" "2") :test #'string=)))))))))
