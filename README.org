@@ -124,7 +124,7 @@ ONE-VS-REST and ONE-VS-ONE are available for multiclass classification by using 
 (clol:test  arow-1vs1 iris-test)
 ; Accuracy: 98.0%, Correct: 49, Total: 50
 #+END_SRC
-MULTICLASS-AROW is a single learner holding K weight vectors rather than a wrapper around binary classifiers, so it takes its regularization parameter directly instead of a binary classifier type. It updates only two weight vectors per data point — the true class and its closest competitor — so its cost per update does not grow with the number of classes.
+MULTICLASS-AROW is a single learner holding K weight vectors rather than a wrapper around binary classifiers, so it takes its regularization parameter directly instead of a binary classifier type. Each update scores every class to find the true class's closest competitor, then writes only those two weight vectors, where ONE-VS-REST writes all K.
 #+BEGIN_SRC lisp
 ;; Define model
 (defparameter mc-arow
