@@ -1135,3 +1135,62 @@
          (multiple-value-bind (accuracy n-correct n-total) (test learner iris.sp)
            (list accuracy n-correct n-total))
          '(44.666664 67 150)))))
+
+;;; Serialization
+;;;
+;;; Neither multiclass AROW struct caches a function object, so SAVE's TYPECASE
+;;; falls through and CL-STORE handles them directly -- no
+;;; *-CLEAR-FUNCTIONS-FOR-STORE pair was added.  These tests are what makes that
+;;; a checked claim rather than an assumption, and they train the restored
+;;; learner because "restores but cannot train" is the failure mode worth
+;;; guarding.
+
+(deftest save-restore-multiclass-arow
+  (let ((learner (make-multiclass-arow iris-dim 3 10)))
+    (train learner iris)
+    (let ((restored (round-trip learner)))
+      (ok (eq (type-of restored) 'clol::multiclass-arow))
+      (ok (equalp (clol::multiclass-arow-weight learner)
+                  (clol::multiclass-arow-weight restored)))
+      (ok (equalp (clol::multiclass-arow-bias learner)
+                  (clol::multiclass-arow-bias restored)))
+      (ok (equalp (clol::multiclass-arow-sigma learner)
+                  (clol::multiclass-arow-sigma restored)))
+      (ok (= (clol::multiclass-arow-n-class learner)
+             (clol::multiclass-arow-n-class restored)))
+      (ok (equal (multiple-value-list (test learner iris :quiet-p t))
+                 (multiple-value-list (test restored iris :quiet-p t))))
+      (ok (progn (train restored iris) t)))))
+
+(deftest save-restore-sparse-multiclass-arow
+  (let ((learner (make-sparse-multiclass-arow iris-dim 3 10)))
+    (train learner iris.sp)
+    (let ((restored (round-trip learner)))
+      (ok (eq (type-of restored) 'clol::sparse-multiclass-arow))
+      (ok (equalp (clol::sparse-multiclass-arow-weight learner)
+                  (clol::sparse-multiclass-arow-weight restored)))
+      (ok (equalp (clol::sparse-multiclass-arow-bias learner)
+                  (clol::sparse-multiclass-arow-bias restored)))
+      (ok (equal (multiple-value-list (test learner iris.sp :quiet-p t))
+                 (multiple-value-list (test restored iris.sp :quiet-p t))))
+      (ok (progn (train restored iris.sp) t)))))
+
+(deftest multiclass-arow-test-stream
+  ;; :STREAM must carry the learner's actual class indices, not merely one line
+  ;; per datum -- a count-only check would still pass a stream fed a constant.
+  (let* ((learner (make-multiclass-arow iris-dim 3 10))
+         (lines (progn (train learner iris) (test-output-lines learner iris))))
+    (ok (= (length lines) (length iris)))
+    (ok (every (lambda (line datum)
+                 (= (parse-integer line)
+                    (clol::multiclass-arow-predict learner (cdr datum))))
+               lines iris))))
+
+(deftest sparse-multiclass-arow-test-stream
+  (let* ((learner (make-sparse-multiclass-arow iris-dim 3 10))
+         (lines (progn (train learner iris.sp) (test-output-lines learner iris.sp))))
+    (ok (= (length lines) (length iris.sp)))
+    (ok (every (lambda (line datum)
+                 (= (parse-integer line)
+                    (clol::sparse-multiclass-arow-predict learner (cdr datum))))
+               lines iris.sp))))
