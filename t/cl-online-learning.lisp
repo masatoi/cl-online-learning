@@ -1220,3 +1220,79 @@
               (ok (= (length lines) (length iris)))
               (ok (null (set-difference (remove-duplicates lines :test #'string=)
                                         '("0" "1" "2") :test #'string=)))))))))
+
+;;;; ------------------------------------------------------------------------
+;;;; FTRL-Proximal
+;;;;
+;;;; McMahan et al., "Ad Click Prediction: a View from the Trenches", KDD 2013,
+;;;; Algorithm 1.  Per coordinate the state is (z, n); the weight is a value the
+;;;; algorithm derives from that state rather than stores.  This implementation
+;;;; materialises it into the WEIGHT slot so DEFINE-LEARNER's generated -PREDICT
+;;;; can be reused, which also makes ONE-VS-REST and ONE-VS-ONE work unchanged.
+
+(defun ftrl-cache-mismatches (learner)
+  "Count coordinates where LEARNER's cached WEIGHT differs from a freshly derived w."
+  (let ((w (clol::lr+ftrl-weight learner))
+        (z (clol::lr+ftrl-z learner))
+        (n (clol::lr+ftrl-n learner))
+        (mismatch 0))
+    (dotimes (i (length w) mismatch)
+      (unless (= (aref w i)
+                 (clol::ftrl-weight-of (aref z i) (aref n i)
+                                       (clol::lr+ftrl-alpha learner)
+                                       (clol::lr+ftrl-beta learner)
+                                       (clol::lr+ftrl-lambda1 learner)
+                                       (clol::lr+ftrl-lambda2 learner)))
+        (incf mismatch)))))
+
+(deftest lr+ftrl-weight-cache-invariant
+  ;; THE test for this learner.  WEIGHT caches a value the algorithm derives from
+  ;; (z, n), and it is only correct if the update refreshes it AFTER updating z and n.
+  ;; Refreshing first still trains and still reaches the same accuracy to two decimal
+  ;; places, so no accuracy assertion can catch the bug.  Measured with the wrong
+  ;; ordering on this data: 89 of 123 coordinates stale.
+  (let ((learner (make-lr+ftrl a1a-dim 0.1 1.0 2.0 1.0)))
+    (dotimes (i 5) (train learner a1a))
+    (ok (= (ftrl-cache-mismatches learner) 0))))
+
+(deftest lr+ftrl-learns-a1a
+  (let ((learner (make-lr+ftrl a1a-dim 0.1 1.0 1.0 1.0)))
+    (dotimes (i 10) (train learner a1a))
+    ;; a1a is 1210 negative to 395 positive, so always answering -1 scores 75.39%.
+    ;; SPARSE-AROW reaches 86.04% and SPARSE-LR+ADAM 85.30% over the same ten passes;
+    ;; FTRL measured 84.80%.  80% is the floor: above the trivial baseline, well below
+    ;; what a working implementation reaches.
+    (ok (> (test learner a1a :quiet-p t) 80.0))))
+
+(deftest lr+ftrl-l1-sparsity
+  ;; Exact zeros are what FTRL-Proximal offers and no other learner here produces.
+  ;; Measured over ten passes: 113 non-zero at lambda1 0.0, 106 at 0.5, 98 at 2.0,
+  ;; 70 at 10.0.  Asserting monotonicity rather than those four integers keeps this a
+  ;; statement about the algorithm instead of another golden value.
+  (let ((counts
+          (mapcar (lambda (lambda1)
+                    (let ((learner (make-lr+ftrl a1a-dim 0.1 1.0 lambda1 1.0)))
+                      (dotimes (i 10) (train learner a1a))
+                      (count-if-not #'zerop (clol::lr+ftrl-weight learner))))
+                  '(0.0 0.5 2.0 10.0))))
+    (ok (apply #'>= counts))
+    (ok (< (fourth counts) (first counts)))))
+
+(deftest metadata-of-lr+ftrl
+  ;; No branch was added to DIM-OF, N-CLASS-OF or SPARSE-LEARNER? for this learner.
+  ;; These assertions are what confirm none was needed.
+  (let ((learner (make-lr+ftrl a1a-dim 0.1 1.0 1.0 1.0)))
+    (ok (= (dim-of learner) a1a-dim))
+    (ok (= (n-class-of learner) 2))
+    (ok (null (sparse-learner? learner)))))
+
+(deftest lr+ftrl-rejects-bad-parameters
+  ;; ALPHA is a divisor in every weight derivation.  ASSERT establishes a CONTINUE
+  ;; restart, so these use HANDLER-CASE rather than ROVE's SIGNALS, which does not
+  ;; reliably catch conditions raised under a restart.
+  (ok (handler-case (progn (make-lr+ftrl a1a-dim 0.0 1.0 1.0 1.0) nil)
+        (error () t)))
+  (ok (handler-case (progn (make-lr+ftrl a1a-dim -0.1 1.0 1.0 1.0) nil)
+        (error () t)))
+  (ok (handler-case (progn (make-lr+ftrl a1a-dim 0.1 1.0 -1.0 1.0) nil)
+        (error () t))))
