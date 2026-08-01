@@ -37,7 +37,18 @@ Load the system:
 (ql:quickload :cl-online-learning)
 ```
 
-Run the full test suite (35 `deftest` forms / 96 assertions in `t/cl-online-learning.lisp`):
+Run the full test suite (36 `deftest` forms / 104 assertions in `t/cl-online-learning.lisp`):
+
+```sh
+./t/run-test.ros
+```
+
+This exits 1 on a red suite, 0 on green, and works on both SBCL and CCL. The CI form is
+`rove cl-online-learning-test.asd` (requires
+`ros install rove cl-store masatoi/cl-libsvm-format`). CI runs on sbcl-bin and ccl-bin ×
+ubuntu/macOS.
+
+SBCL-specific alternative:
 
 ```sh
 ros -Q run --eval '(progn (sb-ext:disable-debugger) (ql:quickload :rove :silent t) (asdf:test-system :cl-online-learning) (sb-ext:quit))'
@@ -47,12 +58,7 @@ The `(sb-ext:disable-debugger)` is not optional: without it, a failing `test-op`
 into the interactive debugger instead of signaling, the debugger then hits EOF on closed
 stdin, and the process exits 0 — a green exit for a red suite.
 
-Simpler and correct without that caveat: `./t/run-test.ros` (exits 1 on a red suite, 0 on
-green). The CI form is `rove cl-online-learning-test.asd` (requires
-`ros install rove cl-store masatoi/cl-libsvm-format`). CI runs on sbcl-bin and ccl-bin ×
-ubuntu/macOS.
-
-`t/cl-online-learning.lisp` is 35 `deftest` forms, so a subset can be run directly: the
+`t/cl-online-learning.lisp` is 36 `deftest` forms, so a subset can be run directly: the
 `run-tests` tool's `test` parameter (e.g.
 `run-tests {"system": "cl-online-learning-test", "test": "cl-online-learning.test::dense-binary-arow"}`)
 or, from a REPL, `(rove:run-test 'cl-online-learning.test::dense-binary-arow)`.
@@ -123,16 +129,17 @@ function needs the same treatment in both helper pairs.
 
 ## Testing notes
 
-`t/cl-online-learning.lisp` is a **golden-value regression test**: its 35 rove `deftest`
-forms carry 96 `ok` assertions that check exact learned weight vectors, biases, and
+`t/cl-online-learning.lisp` is a **golden-value regression test**: its 36 rove `deftest`
+forms carry 104 `ok` assertions that check exact learned weight vectors, biases, and
 accuracy figures (within 0.001) for every learner on `t/dataset/a1a` and
 `t/dataset/iris.scale`. Any change to an update rule, to float precision, or to iteration
 order will break dozens of assertions — the expected values must be regenerated
 deliberately, not patched away. Recent history (`single-float-internal` merge and its
 follow-up fix commits) is exactly this kind of churn.
 
-RLS / regression is covered: the `regression-rls` deftest (added in commit `adbcd21`)
-checks RMSE on `t/dataset/a1a` and the `:stream` output path.
+RLS / regression is covered: the `regression-rls` and `regression-sparse-rls` deftests
+(added in commit `adbcd21`, strengthened later) check RMSE on `t/dataset/a1a` and assert
+that `:stream` emits the learner's actual predictions, not just one line per datum.
 
 ## Examples
 

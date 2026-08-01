@@ -38,8 +38,9 @@
                 (sum-square-error
                   (reduce #'+
                           (mapcar (lambda (datum)
-                                    (let ((predict (,(intern (catstr (symbol-name learner-type) "-PREDICT"))
-                                                    learner (cdr datum))))
+                                    (let ((predict
+                                           (,(intern (catstr (symbol-name learner-type) "-PREDICT"))
+                                            learner (cdr datum))))
                                       (when stream
                                         (format stream "~A~%" predict))
                                       (square (- predict (car datum)))))
