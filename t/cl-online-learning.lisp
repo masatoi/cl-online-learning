@@ -1194,3 +1194,21 @@
                  (= (parse-integer line)
                     (clol::sparse-multiclass-arow-predict learner (cdr datum))))
                lines iris.sp))))
+
+(deftest command-line-tools-multiclass-arow
+  ;; -MTYPE 2 selects a native multiclass learner rather than a wrapper, so
+  ;; -TYPE carries no meaning on this path and is left unset.
+  (if (not (roswell-available-p))
+      (skip "roswell is not on PATH")
+      (uiop:with-temporary-file (:pathname model :prefix "clol-cli-" :type "model")
+        (uiop:with-temporary-file (:pathname out :prefix "clol-cli-" :type "out")
+          (let ((dataset (namestring (dataset-path #P"t/dataset/iris.scale"))))
+            (ok-script-run "clol-train" "-dim" "4" "-n-class" "3" "-n-epoch" "5"
+                           "-mtype" "2" "-gamma" "10"
+                           dataset (namestring model))
+            (ok (plusp (file-size model)))
+            (ok-script-run "clol-predict" dataset (namestring model) (namestring out))
+            (let ((lines (uiop:read-file-lines out)))
+              (ok (= (length lines) (length iris)))
+              (ok (null (set-difference (remove-duplicates lines :test #'string=)
+                                        '("0" "1" "2") :test #'string=)))))))))

@@ -31,6 +31,7 @@ options:
 -mtype : multiclass classifier type
         0 -- one-vs-rest (default)
         1 -- one-vs-one
+        2 -- multiclass AROW (native; -type is ignored, uses -gamma)
 -gamma : regularization parameter for AROW (default 10.0)
 -eta : decay parameter for SCW-I (default 0.9 (0 < eta < 1))
 -c : regularization parameter for SCW-I (default 1.0)"
@@ -49,7 +50,14 @@ options:
              (gamma   (to-float gamma))
              (eta     (to-float eta))
              (c       (to-float c))
-             (mconst  (ecase mtype (0 #'make-one-vs-rest) (1 #'make-one-vs-one))))
+             (mconst  (ecase mtype
+                        (0 #'make-one-vs-rest)
+                        (1 #'make-one-vs-one)
+                        ;; Multiclass AROW is a learner, not a wrapper around
+                        ;; binary learners, so there is no constructor to bind
+                        ;; here.  Kept in the ECASE so an out-of-range -mtype
+                        ;; still errors.
+                        (2 nil))))
         ;; Set target to -1/1 (binary) or integer starting from 0 (multiclass)
         (if binary-p
             (loop for datum in training-set do
@@ -68,15 +76,19 @@ options:
                          (1 (make-arow dim gamma))
                          (2 (make-scw dim eta c))))
                       ((and (not binary-p) sparse-p)
-                       (ecase type
-                         (0 (funcall mconst dim n-class 'sparse-perceptron))
-                         (1 (funcall mconst dim n-class 'sparse-arow gamma))
-                         (2 (funcall mconst dim n-class 'sparse-scw eta c))))
+                       (if (= mtype 2)
+                         (make-sparse-multiclass-arow dim n-class gamma)
+                         (ecase type
+                           (0 (funcall mconst dim n-class 'sparse-perceptron))
+                           (1 (funcall mconst dim n-class 'sparse-arow gamma))
+                           (2 (funcall mconst dim n-class 'sparse-scw eta c)))))
                       ((and (not binary-p) (not sparse-p))
-                       (ecase type
-                         (0 (funcall mconst dim n-class 'perceptron))
-                         (1 (funcall mconst dim n-class 'arow gamma))
-                         (2 (funcall mconst dim n-class 'scw eta c)))))))
+                       (if (= mtype 2)
+                         (make-multiclass-arow dim n-class gamma)
+                         (ecase type
+                           (0 (funcall mconst dim n-class 'perceptron))
+                           (1 (funcall mconst dim n-class 'arow gamma))
+                           (2 (funcall mconst dim n-class 'scw eta c))))))))
           ;; train
           (loop for i from 1 to n-epoch do
             (format t "Training epoch [~A/~A]~%" i n-epoch)
