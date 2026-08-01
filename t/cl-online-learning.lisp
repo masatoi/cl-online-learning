@@ -873,3 +873,104 @@
     (ok (equal (mapcar #'read-from-string (subseq lines 0 5))
                (mapcar (lambda (datum) (round (clol::sparse-scw-predict learner (cdr datum))))
                        (subseq a1a.sp 0 5))))))
+
+;;; CLOL.UTILS
+;;;
+;;; Nothing in the library calls these -- they exist for the roswell scripts,
+;;; which parse every option as a string and must coerce it.
+
+(deftest utils-to-int
+  (ok (= (to-int "42") 42))
+  (ok (= (to-int "-7") -7))
+  ;; A float-valued string truncates rather than erroring, which is what lets
+  ;; -n-epoch 3.0 work.
+  (ok (= (to-int "3.9") 3))
+  (ok (= (to-int 5) 5))
+  (ok (= (to-int 5.9) 5)))
+
+(deftest utils-to-float
+  (ok (approximately-equal (to-float "1.5") 1.5))
+  (ok (approximately-equal (to-float "-0.25") -0.25))
+  (ok (approximately-equal (to-float "2") 2.0))
+  (ok (approximately-equal (to-float 3) 3.0))
+  ;; Every parameter in this library is a single-float; a double would break
+  ;; the type declarations the update bodies compile under.
+  (ok (typep (to-float "1.5") 'single-float))
+  (ok (typep (to-float 3) 'single-float)))
+
+(deftest utils-class-min/max
+  ;; CLOL-TRAIN shifts labels by the minimum this reports, so a wrong minimum
+  ;; silently renumbers every class.
+  (ok (equal (class-min/max iris) '(0 2)))
+  (ok (equal (class-min/max a1a) '(-1.0 1.0)))
+  (ok (equal (class-min/max '((3 . nil) (1 . nil) (2 . nil))) '(1 3))))
+
+(deftest utils-shuffle-vector
+  (let* ((original (coerce '(1 2 3 4 5 6 7 8 9 10) 'simple-vector))
+         (shuffled (shuffle-vector (copy-seq original))))
+    ;; Shuffling is in place and returns the same vector it was given.
+    (ok (= (length shuffled) (length original)))
+    (ok (equal (sort (coerce shuffled 'list) #'<) (coerce original 'list)))
+    (let ((v (coerce '(1 2 3) 'simple-vector)))
+      (ok (eq (shuffle-vector v) v)))))
+
+;;; The roswell scripts
+;;;
+;;; CLOL-TRAIN and CLOL-PREDICT are the library's only user-facing programs and
+;;; the only place DEFMAIN's option parsing runs.  Driving them as subprocesses
+;;; is the sole way to cover that; each pair of runs costs about a second.
+;;;
+;;; Note both scripts train and predict on the same file -- these assert that
+;;; the pipeline runs end to end and emits well-formed predictions, not that
+;;; the model generalizes.
+
+(defun roswell-available-p ()
+  (handler-case
+      (zerop (nth-value 2 (uiop:run-program '("ros" "--version")
+                                            :output nil :error-output nil
+                                            :ignore-error-status t)))
+    (error () nil)))
+
+(defun run-script (name &rest args)
+  "Run the roswell script NAME with ARGS, returning its exit code and output."
+  (multiple-value-bind (out err code)
+      (uiop:run-program
+       (list* "ros"
+              (namestring (dataset-path (make-pathname :directory '(:relative "roswell")
+                                                       :name name :type "ros")))
+              args)
+       :output :string :error-output :string :ignore-error-status t)
+    (values code out err)))
+
+(deftest command-line-tools-binary
+  (if (not (roswell-available-p))
+      (skip "roswell is not on PATH")
+      (uiop:with-temporary-file (:pathname model :prefix "clol-cli-" :type "model")
+        (uiop:with-temporary-file (:pathname out :prefix "clol-cli-" :type "out")
+          (let ((dataset (namestring (dataset-path #P"t/dataset/a1a"))))
+            (ok (zerop (run-script "clol-train" "-dim" "123" "-n-epoch" "1"
+                                   dataset (namestring model))))
+            (ok (probe-file model))
+            (ok (zerop (run-script "clol-predict" dataset (namestring model)
+                                   (namestring out))))
+            (let ((lines (uiop:read-file-lines out)))
+              (ok (= (length lines) (length a1a)))
+              ;; A binary model emits the rounded sign, nothing else.
+              (ok (null (set-difference (remove-duplicates lines :test #'string=)
+                                        '("-1" "1") :test #'string=)))))))))
+
+(deftest command-line-tools-multiclass
+  (if (not (roswell-available-p))
+      (skip "roswell is not on PATH")
+      (uiop:with-temporary-file (:pathname model :prefix "clol-cli-" :type "model")
+        (uiop:with-temporary-file (:pathname out :prefix "clol-cli-" :type "out")
+          (let ((dataset (namestring (dataset-path #P"t/dataset/iris.scale"))))
+            (ok (zerop (run-script "clol-train" "-dim" "4" "-n-class" "3" "-n-epoch" "5"
+                                   dataset (namestring model))))
+            (ok (zerop (run-script "clol-predict" dataset (namestring model)
+                                   (namestring out))))
+            (let ((lines (uiop:read-file-lines out)))
+              (ok (= (length lines) (length iris)))
+              ;; Class indices 0..K-1, not iris.scale's original 1..3 labels.
+              (ok (null (set-difference (remove-duplicates lines :test #'string=)
+                                        '("0" "1" "2") :test #'string=)))))))))
