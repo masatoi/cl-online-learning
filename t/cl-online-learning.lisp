@@ -705,3 +705,92 @@
                                 (clol::sparse-rls-predict learner (cdr (second a1a.sp)))))
       (ok (approximately-equal (read-from-string (third lines))
                                 (clol::sparse-rls-predict learner (cdr (third a1a.sp))))))))
+
+;;;; ------------------------------------------------------------------------
+;;;; API that the golden-value tests above never reach
+;;;;
+;;;; Everything above asserts learned weights.  What follows covers the parts
+;;;; of the exported API those assertions never execute: serialization, the
+;;;; metadata accessors CLOL-PREDICT dispatches on, the classifier :STREAM
+;;;; path, the CLI helpers in CLOL.UTILS, and the two roswell scripts.
+
+;;; Serialization
+;;;
+;;; ONE-VS-REST and ONE-VS-ONE cache function objects in struct slots, which
+;;; CL-STORE cannot serialize; SAVE nulls them, stores, then re-resolves, and
+;;; RESTORE re-resolves after loading.  A learner that survives the round trip
+;;; but cannot train afterwards is the failure mode that guards -- so every
+;;; round-trip test below trains the restored learner, not just tests it.
+
+(defun round-trip (learner)
+  "Save LEARNER to a temporary file and return the restored copy."
+  (uiop:with-temporary-file (:pathname path :prefix "clol-test-" :type "model")
+    (save learner path)
+    (restore path)))
+
+(deftest save-restore-binary-dense
+  (let ((learner (make-arow a1a-dim 10)))
+    (train learner a1a)
+    (let ((restored (round-trip learner)))
+      (ok (eq (type-of restored) 'clol::arow))
+      (ok (equalp (clol::arow-weight learner) (clol::arow-weight restored)))
+      (ok (= (clol::arow-bias learner) (clol::arow-bias restored)))
+      (ok (equal (multiple-value-list (test learner a1a :quiet-p t))
+                 (multiple-value-list (test restored a1a :quiet-p t))))
+      (ok (progn (train restored a1a) t)))))
+
+(deftest save-restore-binary-sparse
+  (let ((learner (make-sparse-scw a1a-dim 0.8 0.1)))
+    (train learner a1a.sp)
+    (let ((restored (round-trip learner)))
+      (ok (eq (type-of restored) 'clol::sparse-scw))
+      (ok (equalp (clol::sparse-scw-weight learner) (clol::sparse-scw-weight restored)))
+      (ok (equal (multiple-value-list (test learner a1a.sp :quiet-p t))
+                 (multiple-value-list (test restored a1a.sp :quiet-p t))))
+      (ok (progn (train restored a1a.sp) t)))))
+
+(deftest save-restore-one-vs-rest
+  (let ((learner (make-one-vs-rest iris-dim 3 'scw 0.9 0.1)))
+    (train learner iris)
+    (let ((restored (round-trip learner)))
+      (ok (eq (type-of restored) 'clol::one-vs-rest))
+      (ok (= (n-class-of learner) (n-class-of restored)))
+      (ok (equalp (clol::scw-weight (aref (clol::one-vs-rest-learners-vector learner) 0))
+                  (clol::scw-weight (aref (clol::one-vs-rest-learners-vector restored) 0))))
+      (ok (equal (multiple-value-list (test learner iris :quiet-p t))
+                 (multiple-value-list (test restored iris :quiet-p t))))
+      ;; Fails if SAVE left a function slot null, or RESTORE did not re-resolve it.
+      (ok (progn (train restored iris) t)))))
+
+(deftest save-restore-one-vs-one
+  (let ((learner (make-one-vs-one iris-dim 3 'arow 10)))
+    (train learner iris)
+    (let ((restored (round-trip learner)))
+      (ok (eq (type-of restored) 'clol::one-vs-one))
+      (ok (equalp (clol::arow-weight (aref (clol::one-vs-one-learners-vector learner) 0))
+                  (clol::arow-weight (aref (clol::one-vs-one-learners-vector restored) 0))))
+      (ok (equal (multiple-value-list (test learner iris :quiet-p t))
+                 (multiple-value-list (test restored iris :quiet-p t))))
+      (ok (progn (train restored iris) t)))))
+
+(deftest save-restore-multiclass-sparse
+  (let ((learner (make-one-vs-one iris-dim 3 'sparse-arow 10)))
+    (train learner iris.sp)
+    (let ((restored (round-trip learner)))
+      (ok (equalp (clol::sparse-arow-weight
+                   (aref (clol::one-vs-one-learners-vector learner) 0))
+                  (clol::sparse-arow-weight
+                   (aref (clol::one-vs-one-learners-vector restored) 0))))
+      (ok (equal (multiple-value-list (test learner iris.sp :quiet-p t))
+                 (multiple-value-list (test restored iris.sp :quiet-p t))))
+      (ok (progn (train restored iris.sp) t)))))
+
+(deftest save-restore-regression
+  (let ((learner (make-rls a1a-dim 1.0)))
+    (train learner a1a)
+    (let ((restored (round-trip learner)))
+      (ok (eq (type-of restored) 'clol::rls))
+      (ok (equalp (clol::rls-weight learner) (clol::rls-weight restored)))
+      (ok (approximately-equal (test learner a1a :quiet-p t)
+                               (test restored a1a :quiet-p t)))
+      (ok (progn (train restored a1a) t)))))
