@@ -996,3 +996,50 @@
               ;; Class indices 0..K-1, not iris.scale's original 1..3 labels.
               (ok (null (set-difference (remove-duplicates lines :test #'string=)
                                         '("0" "1" "2") :test #'string=)))))))))
+
+;;;; ------------------------------------------------------------------------
+;;;; Multiclass AROW
+;;;;
+;;;; A native multiclass learner: one struct holding K weight vectors, updated
+;;;; from the margin between the true class and its closest competitor.  This is
+;;;; the top-1 version, Figure 3 of Crammer, Kulesza & Dredze, "Adaptive
+;;;; regularization of weight vectors", Machine Learning 91(2), 2013.  Unlike
+;;;; ONE-VS-REST and ONE-VS-ONE it is not a wrapper around binary learners, so
+;;;; the sub-learner introspection those tests do does not apply here.
+
+(deftest multiclass-arow-learns-iris
+  (let ((learner (make-multiclass-arow iris-dim 3 10)))
+    ;; IRIS is sorted by class -- 50 examples of class 0, then 50 of class 1, then 50
+    ;; of class 2 (verified: (mapcar #'car iris) is 50 0s, 50 1s, 50 2s). ONE-VS-REST
+    ;; and ONE-VS-ONE are insensitive to that ordering because every sub-learner sees
+    ;; every example. MULTICLASS-AROW is not a wrapper: each UPDATE touches only the
+    ;; true class's row and its single closest competitor, so on a single unshuffled
+    ;; pass the never-yet-true class (2) is touched only as an occasional loser and
+    ;; starts the class-2 block with an undertrained row -- one pass over this exact
+    ;; ordering lands at ~44.7%, confirmed independently in Python (double-float) and
+    ;; by hand for the first update, so the update rule itself is not the bug. Two
+    ;; passes reach ~84.7%, comfortably above the floor below; this mirrors
+    ;; COMMAND-LINE-TOOLS-MULTICLASS, which already trains this same file with
+    ;; "-n-epoch" 5 rather than the CLI's default of 1.
+    (dotimes (i 2) (train learner iris))
+    ;; DENSE-MULTICLASS-OVR-AROW pins ONE-VS-REST + AROW at 73.333336% on this
+    ;; dataset and chance is 33%, so 70% is the floor a working implementation
+    ;; must clear.  This is deliberately a bound, not a golden value: the golden
+    ;; values in DENSE-MULTICLASS-AROW below are generated from this same code
+    ;; and so cannot be evidence that the update rule is right.
+    (ok (> (test learner iris :quiet-p t) 70.0))))
+
+(deftest multiclass-arow-rejects-two-classes
+  ;; With N-CLASS 2, N-CLASS-OF returns 2, so CLOL-PREDICT's
+  ;; (> (n-class-of learner) 2) is false and the script reads labels as +-1
+  ;; instead of 0..K-1 -- silently wrong output rather than an error.  ASSERT
+  ;; establishes a CONTINUE restart, so this uses HANDLER-CASE rather than
+  ;; ROVE's SIGNALS, which does not reliably catch conditions under a restart.
+  (ok (handler-case (progn (make-multiclass-arow iris-dim 2 10) nil)
+        (error () t))))
+
+(deftest metadata-of-multiclass-arow
+  (let ((learner (make-multiclass-arow iris-dim 3 10)))
+    (ok (= (dim-of learner) iris-dim))
+    (ok (= (n-class-of learner) 3))
+    (ok (null (sparse-learner? learner)))))
