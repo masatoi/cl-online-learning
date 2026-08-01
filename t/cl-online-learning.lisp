@@ -500,237 +500,167 @@
            (list accuracy n-correct n-total))
          '(76.666664 115 150)))))
 
+(deftest sparse-multiclass-ovr-perceptron
+  (let ((learner (make-one-vs-rest iris-dim 3 'sparse-perceptron)))
+    (train learner iris.sp)
+    (ok (approximately-equal
+         (clol::sparse-perceptron-weight
+          (aref (clol::one-vs-rest-learners-vector learner) 0))
+         #(-0.72222304 1.0 -1.135593 -1.0000002)))
+    (ok (approximately-equal
+         (clol::sparse-perceptron-bias
+          (aref (clol::one-vs-rest-learners-vector learner) 0))
+         -1.0))
+    (ok (approximately-equal
+         (multiple-value-bind (accuracy n-correct n-total) (test learner iris.sp)
+           (list accuracy n-correct n-total))
+         '(66.66667 100 150)))))
+
+(deftest sparse-multiclass-ovr-arow
+  (let ((learner (make-one-vs-rest iris-dim 3 'sparse-arow 10)))
+    (train learner iris.sp)
+    (ok (approximately-equal
+         (clol::sparse-arow-weight
+          (aref (clol::one-vs-rest-learners-vector learner) 0))
+         #(-0.13031672 0.76698816 -0.48402888 -0.40076354)))
+    (ok (approximately-equal
+         (clol::sparse-arow-bias
+          (aref (clol::one-vs-rest-learners-vector learner) 0))
+         -0.34423327))
+    (ok (approximately-equal
+         (multiple-value-bind (accuracy n-correct n-total) (test learner iris.sp)
+           (list accuracy n-correct n-total))
+         '(73.333336 110 150)))))
+
+(deftest sparse-multiclass-ovr-scw
+  (let ((learner (make-one-vs-rest iris-dim 3 'sparse-scw 0.9 0.1)))
+    (train learner iris.sp)
+    (ok (approximately-equal
+         (clol::sparse-scw-weight
+          (aref (clol::one-vs-rest-learners-vector learner) 0))
+         #(-0.32328632 1.0381005 -0.9833101 -0.7999594)))
+    (ok (approximately-equal
+         (clol::sparse-scw-bias
+          (aref (clol::one-vs-rest-learners-vector learner) 0))
+         -0.24043615))
+    (ok (approximately-equal
+         (multiple-value-bind (accuracy n-correct n-total) (test learner iris.sp)
+           (list accuracy n-correct n-total))
+         '(88.666664 133 150)))))
+
+(deftest sparse-multiclass-ovr-lr+sgd
+  (let ((learner (make-one-vs-rest iris-dim 3 'sparse-lr+sgd 0.00001 0.01)))
+    (train learner iris.sp)
+    (ok (approximately-equal
+         (clol::sparse-lr+sgd-weight
+          (aref (clol::one-vs-rest-learners-vector learner) 0))
+         #(-0.15150318 0.16832216 -0.305458 -0.3036703)))
+    (ok (approximately-equal
+         (clol::sparse-lr+sgd-bias
+          (aref (clol::one-vs-rest-learners-vector learner) 0))
+         -0.23402925))
+    (ok (approximately-equal
+         (multiple-value-bind (accuracy n-correct n-total) (test learner iris.sp)
+           (list accuracy n-correct n-total))
+         '(77.33333 116 150)))))
+
+(deftest sparse-multiclass-ovr-lr+adam
+  (let ((learner (make-one-vs-rest iris-dim 3 'sparse-lr+adam 0.000001 0.001 1.e-8 0.9 0.99)))
+    (train learner iris.sp)
+    (ok (approximately-equal
+         (clol::sparse-lr+adam-weight
+          (aref (clol::one-vs-rest-learners-vector learner) 0))
+         #(-0.070086464 0.0938433 -0.10773331 -0.10142134)))
+    (ok (approximately-equal
+         (clol::sparse-lr+adam-bias
+          (aref (clol::one-vs-rest-learners-vector learner) 0))
+         -0.032753434))
+    (ok (approximately-equal
+         (multiple-value-bind (accuracy n-correct n-total) (test learner iris.sp)
+           (list accuracy n-correct n-total))
+         '(84.66667 127 150)))))
+
+(deftest sparse-multiclass-ovo-perceptron
+  (let ((learner (make-one-vs-one iris-dim 3 'sparse-perceptron)))
+    (train learner iris.sp)
+    (ok (approximately-equal
+         (clol::sparse-perceptron-weight
+          (aref (clol::one-vs-one-learners-vector learner) 0))
+         #(-0.72222304 1.0 -1.135593 -1.0000002)))
+    (ok (approximately-equal
+         (clol::sparse-perceptron-bias
+          (aref (clol::one-vs-one-learners-vector learner) 0))
+         -1.0))
+    (ok (approximately-equal
+         (multiple-value-bind (accuracy n-correct n-total) (test learner iris.sp)
+           (list accuracy n-correct n-total))
+         '(78.0 117 150)))))
+
+(deftest sparse-multiclass-ovo-arow
+  (let ((learner (make-one-vs-one iris-dim 3 'sparse-arow 10)))
+    (train learner iris.sp)
+    (ok (approximately-equal
+         (clol::sparse-arow-weight
+          (aref (clol::one-vs-one-learners-vector learner) 0))
+         #(-0.08833182 0.76720464 -0.4215043 -0.33561507)))
+    (ok (approximately-equal
+         (clol::sparse-arow-bias
+          (aref (clol::one-vs-one-learners-vector learner) 0))
+         -0.30387586))
+    (ok (approximately-equal
+         (multiple-value-bind (accuracy n-correct n-total) (test learner iris.sp)
+           (list accuracy n-correct n-total))
+         '(89.33333 134 150)))))
+
+(deftest sparse-multiclass-ovo-scw
+  (let ((learner (make-one-vs-one iris-dim 3 'sparse-scw 0.9 0.1)))
+    (train learner iris.sp)
+    (ok (approximately-equal
+         (clol::sparse-scw-weight
+          (aref (clol::one-vs-one-learners-vector learner) 0))
+         #(-0.19852017 1.0903767 -0.84503853 -0.6723404)))
+    (ok (approximately-equal
+         (clol::sparse-scw-bias
+          (aref (clol::one-vs-one-learners-vector learner) 0))
+         -0.21044569))
+    (ok (approximately-equal
+         (multiple-value-bind (accuracy n-correct n-total) (test learner iris.sp)
+           (list accuracy n-correct n-total))
+         '(86.666664 130 150)))))
+
+(deftest sparse-multiclass-ovo-lr+sgd
+  (let ((learner (make-one-vs-one iris-dim 3 'sparse-lr+sgd 0.00001 0.01)))
+    (train learner iris.sp)
+    (ok (approximately-equal
+         (clol::sparse-lr+sgd-weight
+          (aref (clol::one-vs-one-learners-vector learner) 0))
+         #(-0.10322041 0.13125679 -0.20361866 -0.19037159)))
+    (ok (approximately-equal
+         (clol::sparse-lr+sgd-bias
+          (aref (clol::one-vs-one-learners-vector learner) 0))
+         -0.043901116))
+    (ok (approximately-equal
+         (multiple-value-bind (accuracy n-correct n-total) (test learner iris.sp)
+           (list accuracy n-correct n-total))
+         '(78.66667 118 150)))))
+
+(deftest sparse-multiclass-ovo-lr+adam
+  (let ((learner (make-one-vs-one iris-dim 3 'sparse-lr+adam 0.000001 0.001 1.e-8 0.9 0.99)))
+    (train learner iris.sp)
+    (ok (approximately-equal
+         (clol::sparse-lr+adam-weight
+          (aref (clol::one-vs-one-learners-vector learner) 0))
+         #(-0.04980133 0.065749794 -0.06675791 -0.060556676)))
+    (ok (approximately-equal
+         (clol::sparse-lr+adam-bias
+          (aref (clol::one-vs-one-learners-vector learner) 0))
+         0.01581899))
+    (ok (approximately-equal
+         (multiple-value-bind (accuracy n-correct n-total) (test learner iris.sp)
+           (list accuracy n-correct n-total))
+         '(76.666664 115 150)))))
+
 #|
-
-;;;;;;;;;;;;;;;; Sparse, Multiclass ;;;;;;;;;;;;;;;;;
-(format t ";;;;;;;;;;;;;;;; Sparse, Multiclass ;;;;;;;;;;;;;;;;;~%")
-
-;;; Read libsvm dataset (Sparse, Multiclass)
-(format t ";;; Read libsvm dataset (Sparse, Multiclass)~%")
-(defvar iris.sp)
-(is (progn
-      (setf iris.sp
-	    (read-data (merge-pathnames #P"t/dataset/iris.scale"
-                                        (asdf:system-source-directory :cl-online-learning-test))
-                       iris-dim :sparse-p t :multiclass-p t))
-      (sparse-vector-value-vector (cdar iris.sp)))
-    #(-0.555556 0.25 -0.864407 -0.916667) :test #'equalp)
-
-;;;;;;;;;;;;;;;; Sparse, Multiclass (one-vs-rest) ;;;;;;;;;;;;;;;;;
-
-;;; Perceptron learner (Sparse, Multiclass (one-vs-rest))
-(format t ";;; Perceptron learner (Sparse, Multiclass (one-vs-rest))~%")
-(defvar mulc-perceptron-learner.sp)
-
-(is (progn
-      (setf mulc-perceptron-learner.sp (make-one-vs-rest iris-dim 3 'sparse-perceptron))
-      (train mulc-perceptron-learner.sp iris.sp)
-      (clol::sparse-perceptron-weight
-       (aref (clol::one-vs-rest-learners-vector mulc-perceptron-learner.sp) 0)))
-    #(-0.72222304 1.0 -1.135593 -1.0000002)
-    :test #'approximately-equal)
-
-(is (clol::sparse-perceptron-bias
-     (aref (clol::one-vs-rest-learners-vector mulc-perceptron-learner.sp) 0))
-    -1.0 :test #'approximately-equal)
-
-(is (multiple-value-bind (accuracy n-correct n-total)
-	(test mulc-perceptron-learner.sp iris.sp)
-      (list accuracy n-correct n-total))
-    '(66.66667 100 150)
-    :test #'approximately-equal)
-
-;;; AROW learner (Sparse, Multiclass (one-vs-rest))
-(format t ";;; AROW learner (Sparse, Multiclass (one-vs-rest))~%")
-(defvar mulc-arow-learner.sp)
-
-(is (progn
-      (setf mulc-arow-learner.sp (make-one-vs-rest iris-dim 3 'sparse-arow 10))
-      (train mulc-arow-learner.sp iris.sp)
-      (clol::sparse-arow-weight
-       (aref (clol::one-vs-rest-learners-vector mulc-arow-learner.sp) 0)))
-    #(-0.13031672 0.76698816 -0.48402888 -0.40076354)
-    :test #'approximately-equal)
-
-(is (clol::sparse-arow-bias
-     (aref (clol::one-vs-rest-learners-vector mulc-arow-learner.sp) 0))
-    -0.34423327 :test #'approximately-equal)
-
-(is (multiple-value-bind (accuracy n-correct n-total)
-	(test mulc-arow-learner.sp iris.sp)
-      (list accuracy n-correct n-total))
-    '(73.333336 110 150)
-    :test #'approximately-equal)
-
-;;; SCW-I learner (Sparse, Multiclass (one-vs-rest))
-(format t ";;; SCW-I learner (Sparse, Multiclass (one-vs-rest))~%")
-(defvar mulc-scw-learner.sp)
-
-(is (progn
-      (setf mulc-scw-learner.sp (make-one-vs-rest iris-dim 3 'sparse-scw 0.9 0.1))
-      (train mulc-scw-learner.sp iris.sp)
-      (clol::sparse-scw-weight
-       (aref (clol::one-vs-rest-learners-vector mulc-scw-learner.sp) 0)))
-    #(-0.32328632 1.0381005 -0.9833101 -0.7999594)
-    :test #'approximately-equal)
-
-(is (clol::sparse-scw-bias
-     (aref (clol::one-vs-rest-learners-vector mulc-scw-learner.sp) 0))
-    -0.24043615 :test #'approximately-equal)
-
-(is (multiple-value-bind (accuracy n-correct n-total)
-	(test mulc-scw-learner.sp iris.sp)
-      (list accuracy n-correct n-total))
-    '(88.666664 133 150)
-    :test #'approximately-equal)
-
-;;; LR+SGD learner (Sparse, Multiclass (one-vs-rest))
-(format t ";;; LR+SGD learner (Sparse, Multiclass (one-vs-rest))~%")
-(defvar mulc-lr+sgd-learner.sp)
-
-(is (progn
-      (setf mulc-lr+sgd-learner.sp (make-one-vs-rest iris-dim 3 'sparse-lr+sgd  0.00001 0.01))
-      (train mulc-lr+sgd-learner.sp iris.sp)
-      (clol::sparse-lr+sgd-weight
-       (aref (clol::one-vs-rest-learners-vector mulc-lr+sgd-learner.sp) 0)))
-    #(-0.15150318 0.16832216 -0.305458 -0.3036703)
-    :test #'approximately-equal)
-
-(is (clol::sparse-lr+sgd-bias
-     (aref (clol::one-vs-rest-learners-vector mulc-lr+sgd-learner.sp) 0))
-    -0.23402925 :test #'approximately-equal)
-
-(is (multiple-value-bind (accuracy n-correct n-total)
-	(test mulc-lr+sgd-learner.sp iris.sp)
-      (list accuracy n-correct n-total))
-    '(77.33333 116 150)
-    :test #'approximately-equal)
-
-;;; LR+ADAM learner (Sparse, Multiclass (one-vs-rest))
-(format t ";;; LR+ADAM learner (Sparse, Multiclass (one-vs-rest))~%")
-(defvar mulc-lr+adam-learner.sp)
-
-(is (progn
-      (setf mulc-lr+adam-learner.sp (make-one-vs-rest iris-dim 3 'sparse-lr+adam
-                                                      0.000001 0.001 1.e-8 0.9 0.99))
-      (train mulc-lr+adam-learner.sp iris.sp)
-      (clol::sparse-lr+adam-weight
-       (aref (clol::one-vs-rest-learners-vector mulc-lr+adam-learner.sp) 0)))
-    #(-0.070086464 0.0938433 -0.10773331 -0.10142134)
-    :test #'approximately-equal)
-
-(is (clol::sparse-lr+adam-bias
-     (aref (clol::one-vs-rest-learners-vector mulc-lr+adam-learner.sp) 0))
-    -0.032753434 :test #'approximately-equal)
-
-(is (multiple-value-bind (accuracy n-correct n-total)
-	(test mulc-lr+adam-learner.sp iris.sp)
-      (list accuracy n-correct n-total))
-    '(84.66667 127 150)
-    :test #'approximately-equal)
-
-;;;;;;;;;;;;;;;; Sparse, Multiclass (one-vs-one) ;;;;;;;;;;;;;;;;;
-
-;;; Perceptron learner (Sparse, Multiclass (one-vs-one))
-(format t ";;; Perceptron learner (Sparse, Multiclass (one-vs-one))~%")
-(is (progn
-      (setf mulc-perceptron-learner.sp (make-one-vs-one iris-dim 3 'sparse-perceptron))
-      (train mulc-perceptron-learner.sp iris.sp)
-      (clol::sparse-perceptron-weight
-       (aref (clol::one-vs-one-learners-vector mulc-perceptron-learner.sp) 0)))
-    #(-0.72222304 1.0 -1.135593 -1.0000002)
-    :test #'approximately-equal)
-
-(is (clol::sparse-perceptron-bias
-     (aref (clol::one-vs-one-learners-vector mulc-perceptron-learner.sp) 0))
-    -1.0 :test #'approximately-equal)
-
-(is (multiple-value-bind (accuracy n-correct n-total)
-	(test mulc-perceptron-learner.sp iris.sp)
-      (list accuracy n-correct n-total))
-    '(78.0 117 150)
-    :test #'approximately-equal)
-
-;;; AROW learner (Sparse, Multiclass (one-vs-one))
-(format t ";;; AROW learner (Sparse, Multiclass (one-vs-one))~%")
-(is (progn
-      (setf mulc-arow-learner.sp (make-one-vs-one iris-dim 3 'sparse-arow 10))
-      (train mulc-arow-learner.sp iris.sp)
-      (clol::sparse-arow-weight
-       (aref (clol::one-vs-one-learners-vector mulc-arow-learner.sp) 0)))
-    #(-0.08833182 0.76720464 -0.4215043 -0.33561507)
-    :test #'approximately-equal)
-
-(is (clol::sparse-arow-bias
-     (aref (clol::one-vs-one-learners-vector mulc-arow-learner.sp) 0))
-    -0.30387586 :test #'approximately-equal)
-
-(is (multiple-value-bind (accuracy n-correct n-total)
-	(test mulc-arow-learner.sp iris.sp)
-      (list accuracy n-correct n-total))
-    '(89.33333 134 150)
-    :test #'approximately-equal)
-
-;;; SCW-I learner (Sparse, Multiclass (one-vs-one))
-(format t ";;; SCW-I learner (Sparse, Multiclass (one-vs-one))~%")
-(is (progn
-      (setf mulc-scw-learner.sp (make-one-vs-one iris-dim 3 'sparse-scw 0.9 0.1))
-      (train mulc-scw-learner.sp iris.sp)
-      (clol::sparse-scw-weight
-       (aref (clol::one-vs-one-learners-vector mulc-scw-learner.sp) 0)))
-    #(-0.19852017 1.0903767 -0.84503853 -0.6723404)
-    :test #'approximately-equal)
-
-(is (clol::sparse-scw-bias
-     (aref (clol::one-vs-one-learners-vector mulc-scw-learner.sp) 0))
-    -0.21044569 :test #'approximately-equal)
-
-(is (multiple-value-bind (accuracy n-correct n-total)
-	(test mulc-scw-learner.sp iris.sp)
-      (list accuracy n-correct n-total))
-    '(86.666664 130 150)
-    :test #'approximately-equal)
-
-;;; LR+SGD learner (Sparse, Multiclass (one-vs-one))
-(format t ";;; LR+SGD learner (Sparse, Multiclass (one-vs-one))~%")
-(is (progn
-      (setf mulc-lr+sgd-learner.sp (make-one-vs-one iris-dim 3 'sparse-lr+sgd  0.00001 0.01))
-      (train mulc-lr+sgd-learner.sp iris.sp)
-      (clol::sparse-lr+sgd-weight
-       (aref (clol::one-vs-one-learners-vector mulc-lr+sgd-learner.sp) 0)))
-    #(-0.10322041 0.13125679 -0.20361866 -0.19037159)
-    :test #'approximately-equal)
-
-(is (clol::sparse-lr+sgd-bias
-     (aref (clol::one-vs-one-learners-vector mulc-lr+sgd-learner.sp) 0))
-    -0.043901116 :test #'approximately-equal)
-
-(is (multiple-value-bind (accuracy n-correct n-total)
-	(test mulc-lr+sgd-learner.sp iris.sp)
-      (list accuracy n-correct n-total))
-    '(78.66667 118 150)
-    :test #'approximately-equal)
-
-;;; LR+ADAM learner (Sparse, Multiclass (one-vs-one))
-(format t ";;; LR+ADAM learner (Sparse, Multiclass (one-vs-one))~%")
-(is (progn
-      (setf mulc-lr+adam-learner.sp (make-one-vs-one iris-dim 3 'sparse-lr+adam
-                                                      0.000001 0.001 1.e-8 0.9 0.99))
-      (train mulc-lr+adam-learner.sp iris.sp)
-      (clol::sparse-lr+adam-weight
-       (aref (clol::one-vs-one-learners-vector mulc-lr+adam-learner.sp) 0)))
-    #(-0.04980133 0.065749794 -0.06675791 -0.060556676)
-    :test #'approximately-equal)
-
-(is (clol::sparse-lr+adam-bias
-     (aref (clol::one-vs-one-learners-vector mulc-lr+adam-learner.sp) 0))
-    0.01581899 :test #'approximately-equal)
-
-(is (multiple-value-bind (accuracy n-correct n-total)
-	(test mulc-lr+adam-learner.sp iris.sp)
-      (list accuracy n-correct n-total))
-    '(76.666664 115 150)
-    :test #'approximately-equal)
 
 ;;;;;;;;;;;;;;;; Regression ;;;;;;;;;;;;;;;;;
 (format t ";;;;;;;;;;;;;;;; Regression ;;;;;;;;;;;;;;;;;~%")
