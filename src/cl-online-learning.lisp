@@ -21,6 +21,10 @@
    :make-sparse-lr+adam :sparse-lr+adam-update :sparse-lr+adam-train :sparse-lr+adam-predict :sparse-lr+adam-test
    :make-one-vs-rest :one-vs-rest-update :one-vs-rest-train :one-vs-rest-predict :one-vs-rest-test
    :make-one-vs-one :one-vs-one-update :one-vs-one-train :one-vs-one-predict :one-vs-one-test
+   :make-multiclass-arow :multiclass-arow-update :multiclass-arow-train
+   :multiclass-arow-predict :multiclass-arow-test
+   :make-sparse-multiclass-arow :sparse-multiclass-arow-update :sparse-multiclass-arow-train
+   :sparse-multiclass-arow-predict :sparse-multiclass-arow-test
    ;; regression
    :make-rls :rls-update :rls-train :rls-predict :rls-test
    :make-sparse-rls :sparse-rls-update :sparse-rls-train :sparse-rls-predict :sparse-rls-test
@@ -143,14 +147,21 @@
             (one-vs-one  (aref (one-vs-one-learners-vector learner) 0))
             (one-vs-rest (aref (one-vs-rest-learners-vector learner) 0))
             (t learner))))
-    (length (funcall (intern (catstr (symbol-name (type-of learner)) "-WEIGHT")
-                             :cl-online-learning)
-                     learner))))
+    (typecase learner
+      ;; A native multiclass learner's WEIGHT is a vector of K rows, so the
+      ;; generic (LENGTH <TYPE>-WEIGHT) below would return K, not the dimension.
+      (multiclass-arow (length (svref (multiclass-arow-weight learner) 0)))
+      (sparse-multiclass-arow (length (svref (sparse-multiclass-arow-weight learner) 0)))
+      (t (length (funcall (intern (catstr (symbol-name (type-of learner)) "-WEIGHT")
+                                  :cl-online-learning)
+                          learner))))))
 
 (defun n-class-of (learner)
   (typecase learner
-    (one-vs-one  (one-vs-one-n-class learner))
-    (one-vs-rest (one-vs-rest-n-class learner))
+    (one-vs-one      (one-vs-one-n-class learner))
+    (one-vs-rest     (one-vs-rest-n-class learner))
+    (multiclass-arow (multiclass-arow-n-class learner))
+    (sparse-multiclass-arow (sparse-multiclass-arow-n-class learner))
     (t 2)))
 
 (defun sparse-learner? (learner)
@@ -1135,6 +1146,314 @@
           (function-by-name (catstr (symbol-name learner-type) "-UPDATE"))
           (one-vs-one-learner-predict mulc)
           (function-by-name (catstr (symbol-name learner-type) "-PREDICT")))))
+
+;;;; Multiclass AROW
+;;;;
+;;;; The top-1 version of multi-class AROW, Figure 3 of Crammer, Kulesza &
+;;;; Dredze, "Adaptive regularization of weight vectors", Machine Learning
+;;;; 91(2):155-187, 2013.  Unlike ONE-VS-REST and ONE-VS-ONE this is not a
+;;;; wrapper: it is a single learner holding K weight vectors, updated from the
+;;;; margin between the true class and its closest competitor.
+;;;;
+;;;; Under the paper's 1-of-K feature map with a diagonal covariance per class,
+;;;; Figure 3 reduces to (writing s for the closest competitor of the true
+;;;; class y, and gamma for the paper's r):
+;;;;
+;;;;   m = (mu_y . x + b_y) - (mu_s . x + b_s)
+;;;;   v = (x' Sigma_y x + sigma0_y) + (x' Sigma_s x + sigma0_s)
+;;;;   beta = 1 / (v + gamma)        alpha = (1 - m) * beta
+;;;;   mu_y    += alpha * Sigma_y x       mu_s    -= alpha * Sigma_s x
+;;;;   b_y     += alpha * sigma0_y        b_s     -= alpha * sigma0_s
+;;;;   Sigma_y -= beta * (Sigma_y x)^2    Sigma_s -= beta * (Sigma_s x)^2
+;;;;   sigma0_y -= beta * sigma0_y^2      sigma0_s -= beta * sigma0_s^2
+;;;;
+;;;; which is exactly the binary AROW update body generalized to two classes, so
+;;;; every existing CLOL.VECTOR operator applies and none had to be added.
+
+(defun %vec-head (vec &optional (n 10))
+  "Return the first N elements of VEC, or VEC itself when it is no longer than N."
+  (if (> (length vec) n) (subseq vec 0 n) vec))
+
+(defun %make-weight-vectors (n-class input-dimension initial-element)
+  "Return a SIMPLE-VECTOR of N-CLASS fresh INPUT-DIMENSION vectors of INITIAL-ELEMENT.
+Each row is a plain (SIMPLE-ARRAY SINGLE-FLOAT), identical in type to every other
+learner's weight, which is what lets the existing vector operators apply per row."
+  (let ((rows (make-array n-class)))
+    (dotimes (i n-class rows)
+      (setf (svref rows i) (make-vec input-dimension initial-element)))))
+
+(defstruct (multiclass-arow (:constructor  %make-multiclass-arow)
+                            (:print-object %print-multiclass-arow))
+  input-dimension n-class weight bias
+  gamma sigma sigma0 tmp-vec1 tmp-vec2 tmp-vec3)
+
+(defun %print-multiclass-arow (obj stream)
+  (format stream "#S(MULTICLASS-AROW~%~T:INPUT-DIMENSION ~A~%~T:N-CLASS ~A~%~T:WEIGHT #(~A ...)~%~T:BIAS ~A~%~T:GAMMA ~A~%~T:SIGMA #(~A ...)~%~T:SIGMA0 ~A)"
+          (multiclass-arow-input-dimension obj)
+          (multiclass-arow-n-class obj)
+          (%vec-head (svref (multiclass-arow-weight obj) 0))
+          (%vec-head (multiclass-arow-bias obj))
+          (multiclass-arow-gamma obj)
+          (%vec-head (svref (multiclass-arow-sigma obj) 0))
+          (%vec-head (multiclass-arow-sigma0 obj))))
+
+(defun make-multiclass-arow (input-dimension n-class gamma)
+  (check-type input-dimension integer)
+  (check-type n-class integer)
+  (check-type gamma number)
+  (assert (> input-dimension 0))
+  ;; N-CLASS 2 would make N-CLASS-OF return 2, putting CLOL-PREDICT on the binary
+  ;; label path and silently misreading the dataset.  Same bound as
+  ;; MAKE-ONE-VS-REST and MAKE-ONE-VS-ONE.
+  (assert (> n-class 2))
+  (%make-multiclass-arow
+   :input-dimension input-dimension
+   :n-class n-class
+   :weight (%make-weight-vectors n-class input-dimension 0.0) ; mu
+   :bias (make-vec n-class 0.0)                               ; mu0
+   :gamma (coerce gamma 'single-float)
+   :sigma (%make-weight-vectors n-class input-dimension 1.0)
+   :sigma0 (make-vec n-class 1.0)
+   :tmp-vec1 (make-vec input-dimension 0.0)
+   :tmp-vec2 (make-vec input-dimension 0.0)
+   :tmp-vec3 (make-vec input-dimension 0.0)))
+
+(defun multiclass-arow-predict (learner input)
+  (declare (type multiclass-arow learner)
+           (type (simple-array single-float) input)
+           (optimize (speed 3) (safety 0)))
+  (let ((weight (multiclass-arow-weight learner))
+        (bias (multiclass-arow-bias learner))
+        (n-class (multiclass-arow-n-class learner))
+        (max-f most-negative-single-float)
+        (max-i 0))
+    (declare (type simple-vector weight)
+             (type (simple-array single-float) bias)
+             (type fixnum n-class max-i)
+             (type single-float max-f))
+    ;; Strict >, so the lowest index wins a tie -- same rule as
+    ;; ONE-VS-REST-PREDICT, and what makes the golden values reproducible.
+    (loop for i of-type fixnum from 0 below n-class do
+      (let ((fi (+ (dot (the (simple-array single-float) (svref weight i)) input)
+                   (aref bias i))))
+        (declare (type single-float fi))
+        (when (> fi max-f)
+          (setf max-f fi
+                max-i i))))
+    max-i))
+
+;; training-label should be an integer class index (0 ... K-1)
+;; This range is not checked under (safety 0): an out-of-range label corrupts
+;; memory (an unchecked heap write past WEIGHT/BIAS) rather than signalling.
+(defun multiclass-arow-update (learner input training-label)
+  (declare (type multiclass-arow learner)
+           (type (simple-array single-float) input)
+           (type fixnum training-label)
+           (optimize (speed 3) (safety 0)))
+  (let ((weight (multiclass-arow-weight learner))
+        (bias (multiclass-arow-bias learner))
+        (sigma (multiclass-arow-sigma learner))
+        (sigma0 (multiclass-arow-sigma0 learner))
+        (n-class (multiclass-arow-n-class learner))
+        (f-y 0.0)
+        (f-s most-negative-single-float)
+        (s 0))
+    (declare (type simple-vector weight sigma)
+             (type (simple-array single-float) bias sigma0)
+             (type fixnum n-class s)
+             (type single-float f-y f-s))
+    ;; One pass: the true class's score, and the best-scoring competitor.
+    (loop for i of-type fixnum from 0 below n-class do
+      (let ((fi (+ (dot (the (simple-array single-float) (svref weight i)) input)
+                   (aref bias i))))
+        (declare (type single-float fi))
+        (if (= i training-label)
+          (setf f-y fi)
+          (when (> fi f-s)
+            (setf f-s fi
+                  s i)))))
+    (let ((m (- f-y f-s)))
+      (declare (type single-float m))
+      (when (< m 1.0)
+        (let ((weight-y (svref weight training-label))
+              (weight-s (svref weight s))
+              (sigma-y (svref sigma training-label))
+              (sigma-s (svref sigma s))
+              (tmp-vec1 (multiclass-arow-tmp-vec1 learner))
+              (tmp-vec2 (multiclass-arow-tmp-vec2 learner))
+              (tmp-vec3 (multiclass-arow-tmp-vec3 learner))
+              (sigma0-y (aref sigma0 training-label))
+              (sigma0-s (aref sigma0 s)))
+          (declare (type (simple-array single-float)
+                         weight-y weight-s sigma-y sigma-s tmp-vec1 tmp-vec2 tmp-vec3)
+                   (type single-float sigma0-y sigma0-s))
+          ;; Both Sigma_k x are needed before the confidence v can be formed, and
+          ;; both must survive the weight update intact because the sigma update
+          ;; squares them -- hence three scratch vectors rather than two.
+          (v* sigma-y input tmp-vec1)
+          (v* sigma-s input tmp-vec2)
+          (let* ((v (+ (dot tmp-vec1 input) (dot tmp-vec2 input) sigma0-y sigma0-s))
+                 (beta (/ 1.0 (+ v (multiclass-arow-gamma learner))))
+                 ;; No MAX(0, ...) needed: the M < 1.0 guard makes 1 - m positive.
+                 (alpha (* (- 1.0 m) beta)))
+            (declare (type single-float v beta alpha))
+            ;; Update weight
+            (v+ weight-y (v*n tmp-vec1 alpha tmp-vec3) weight-y)
+            (v- weight-s (v*n tmp-vec2 alpha tmp-vec3) weight-s)
+            ;; Update bias
+            (setf (aref bias training-label) (+ (aref bias training-label)
+                                                (* alpha sigma0-y))
+                  (aref bias s)              (- (aref bias s)
+                                                (* alpha sigma0-s)))
+            ;; Update sigma
+            (v- sigma-y (v*n (v* tmp-vec1 tmp-vec1 tmp-vec1) beta tmp-vec1) sigma-y)
+            (v- sigma-s (v*n (v* tmp-vec2 tmp-vec2 tmp-vec2) beta tmp-vec2) sigma-s)
+            ;; Update sigma0
+            (setf (aref sigma0 training-label) (- sigma0-y (* beta sigma0-y sigma0-y))
+                  (aref sigma0 s)              (- sigma0-s (* beta sigma0-s sigma0-s))))))))
+  learner)
+
+(define-multi-class-learner-train/test-functions multiclass-arow)
+
+;;; Sparse Multiclass AROW
+;;;
+;;; Identical arithmetic to MULTICLASS-AROW; only the traversal differs.  SIGMA
+;;; rows and the three scratch vectors are pseudosparse: full-length dense
+;;; arrays read and written only at the indices in the input's INDEX-VECTOR, so
+;;; an update stays O(nnz) while the storage stays a plain dense array.  Values
+;;; left in a scratch vector outside the current index set are stale and are
+;;; never read, which is what makes reusing one scratch across data points safe.
+
+(defstruct (sparse-multiclass-arow (:constructor  %make-sparse-multiclass-arow)
+                                   (:print-object %print-sparse-multiclass-arow))
+  input-dimension n-class weight bias
+  gamma sigma sigma0 tmp-vec1 tmp-vec2 tmp-vec3)
+
+(defun %print-sparse-multiclass-arow (obj stream)
+  (format stream "#S(SPARSE-MULTICLASS-AROW~%~T:INPUT-DIMENSION ~A~%~T:N-CLASS ~A~%~T:WEIGHT #(~A ...)~%~T:BIAS ~A~%~T:GAMMA ~A~%~T:SIGMA #(~A ...)~%~T:SIGMA0 ~A)"
+          (sparse-multiclass-arow-input-dimension obj)
+          (sparse-multiclass-arow-n-class obj)
+          (%vec-head (svref (sparse-multiclass-arow-weight obj) 0))
+          (%vec-head (sparse-multiclass-arow-bias obj))
+          (sparse-multiclass-arow-gamma obj)
+          (%vec-head (svref (sparse-multiclass-arow-sigma obj) 0))
+          (%vec-head (sparse-multiclass-arow-sigma0 obj))))
+
+(defun make-sparse-multiclass-arow (input-dimension n-class gamma)
+  (check-type input-dimension integer)
+  (check-type n-class integer)
+  (check-type gamma number)
+  (assert (> input-dimension 0))
+  (assert (> n-class 2))
+  (%make-sparse-multiclass-arow
+   :input-dimension input-dimension
+   :n-class n-class
+   :weight (%make-weight-vectors n-class input-dimension 0.0) ; mu
+   :bias (make-vec n-class 0.0)                               ; mu0
+   :gamma (coerce gamma 'single-float)
+   :sigma (%make-weight-vectors n-class input-dimension 1.0)
+   :sigma0 (make-vec n-class 1.0)
+   :tmp-vec1 (make-vec input-dimension 0.0)
+   :tmp-vec2 (make-vec input-dimension 0.0)
+   :tmp-vec3 (make-vec input-dimension 0.0)))
+
+(defun sparse-multiclass-arow-predict (learner input)
+  (declare (type sparse-multiclass-arow learner)
+           (type sparse-vector input)
+           (optimize (speed 3) (safety 0)))
+  (let ((weight (sparse-multiclass-arow-weight learner))
+        (bias (sparse-multiclass-arow-bias learner))
+        (n-class (sparse-multiclass-arow-n-class learner))
+        (max-f most-negative-single-float)
+        (max-i 0))
+    (declare (type simple-vector weight)
+             (type (simple-array single-float) bias)
+             (type fixnum n-class max-i)
+             (type single-float max-f))
+    (loop for i of-type fixnum from 0 below n-class do
+      (let ((fi (+ (ds-dot (the (simple-array single-float) (svref weight i)) input)
+                   (aref bias i))))
+        (declare (type single-float fi))
+        (when (> fi max-f)
+          (setf max-f fi
+                max-i i))))
+    max-i))
+
+;; training-label should be an integer class index (0 ... K-1)
+;; This range is not checked under (safety 0): an out-of-range label corrupts
+;; memory (an unchecked heap write past WEIGHT/BIAS) rather than signalling.
+(defun sparse-multiclass-arow-update (learner input training-label)
+  (declare (type sparse-multiclass-arow learner)
+           (type sparse-vector input)
+           (type fixnum training-label)
+           (optimize (speed 3) (safety 0)))
+  (let ((weight (sparse-multiclass-arow-weight learner))
+        (bias (sparse-multiclass-arow-bias learner))
+        (sigma (sparse-multiclass-arow-sigma learner))
+        (sigma0 (sparse-multiclass-arow-sigma0 learner))
+        (n-class (sparse-multiclass-arow-n-class learner))
+        (index-vector (sparse-vector-index-vector input))
+        (f-y 0.0)
+        (f-s most-negative-single-float)
+        (s 0))
+    (declare (type simple-vector weight sigma)
+             (type (simple-array single-float) bias sigma0)
+             (type (simple-array fixnum) index-vector)
+             (type fixnum n-class s)
+             (type single-float f-y f-s))
+    (loop for i of-type fixnum from 0 below n-class do
+      (let ((fi (+ (ds-dot (the (simple-array single-float) (svref weight i)) input)
+                   (aref bias i))))
+        (declare (type single-float fi))
+        (if (= i training-label)
+          (setf f-y fi)
+          (when (> fi f-s)
+            (setf f-s fi
+                  s i)))))
+    (let ((m (- f-y f-s)))
+      (declare (type single-float m))
+      (when (< m 1.0)
+        (let ((weight-y (svref weight training-label))
+              (weight-s (svref weight s))
+              (sigma-y (svref sigma training-label))
+              (sigma-s (svref sigma s))
+              (tmp-vec1 (sparse-multiclass-arow-tmp-vec1 learner))
+              (tmp-vec2 (sparse-multiclass-arow-tmp-vec2 learner))
+              (tmp-vec3 (sparse-multiclass-arow-tmp-vec3 learner))
+              (sigma0-y (aref sigma0 training-label))
+              (sigma0-s (aref sigma0 s)))
+          (declare (type (simple-array single-float)
+                         weight-y weight-s sigma-y sigma-s tmp-vec1 tmp-vec2 tmp-vec3)
+                   (type single-float sigma0-y sigma0-s))
+          (ds-v* sigma-y input tmp-vec1)
+          (ds-v* sigma-s input tmp-vec2)
+          (let* ((v (+ (ds-dot tmp-vec1 input) (ds-dot tmp-vec2 input) sigma0-y sigma0-s))
+                 (beta (/ 1.0 (+ v (sparse-multiclass-arow-gamma learner))))
+                 (alpha (* (- 1.0 m) beta)))
+            (declare (type single-float v beta alpha))
+            ;; Update weight
+            (dps-v+ weight-y (ps-v*n tmp-vec1 alpha index-vector tmp-vec3)
+                    index-vector weight-y)
+            (dps-v- weight-s (ps-v*n tmp-vec2 alpha index-vector tmp-vec3)
+                    index-vector weight-s)
+            ;; Update bias
+            (setf (aref bias training-label) (+ (aref bias training-label)
+                                                (* alpha sigma0-y))
+                  (aref bias s)              (- (aref bias s)
+                                                (* alpha sigma0-s)))
+            ;; Update sigma
+            (dps-v- sigma-y (ps-v*n (dps-v* tmp-vec1 tmp-vec1 index-vector tmp-vec1)
+                                    beta index-vector tmp-vec1)
+                    index-vector sigma-y)
+            (dps-v- sigma-s (ps-v*n (dps-v* tmp-vec2 tmp-vec2 index-vector tmp-vec2)
+                                    beta index-vector tmp-vec2)
+                    index-vector sigma-s)
+            ;; Update sigma0
+            (setf (aref sigma0 training-label) (- sigma0-y (* beta sigma0-y sigma0-y))
+                  (aref sigma0 s)              (- sigma0-s (* beta sigma0-s sigma0-s))))))))
+  learner)
+
+(define-multi-class-learner-train/test-functions sparse-multiclass-arow)
 
 ;;; Save and restore models
 

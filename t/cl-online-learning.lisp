@@ -996,3 +996,227 @@
               ;; Class indices 0..K-1, not iris.scale's original 1..3 labels.
               (ok (null (set-difference (remove-duplicates lines :test #'string=)
                                         '("0" "1" "2") :test #'string=)))))))))
+
+;;;; ------------------------------------------------------------------------
+;;;; Multiclass AROW
+;;;;
+;;;; A native multiclass learner: one struct holding K weight vectors, updated
+;;;; from the margin between the true class and its closest competitor.  This is
+;;;; the top-1 version, Figure 3 of Crammer, Kulesza & Dredze, "Adaptive
+;;;; regularization of weight vectors", Machine Learning 91(2), 2013.  Unlike
+;;;; ONE-VS-REST and ONE-VS-ONE it is not a wrapper around binary learners, so
+;;;; the sub-learner introspection those tests do does not apply here.
+
+(deftest multiclass-arow-learns-iris
+  (let ((learner (make-multiclass-arow iris-dim 3 10)))
+    ;; IRIS is sorted by class -- 50 examples of class 0, then 50 of class 1, then 50
+    ;; of class 2 (verified: (mapcar #'car iris) is 50 0s, 50 1s, 50 2s). ONE-VS-REST
+    ;; and ONE-VS-ONE are insensitive to that ordering because every sub-learner sees
+    ;; every example. MULTICLASS-AROW is not a wrapper: each UPDATE touches only the
+    ;; true class's row and its single closest competitor, so on a single unshuffled
+    ;; pass the never-yet-true class (2) is touched only as an occasional loser and
+    ;; starts the class-2 block with an undertrained row -- one pass over this exact
+    ;; ordering lands at ~44.7%, confirmed independently in Python (double-float) and
+    ;; by hand for the first update, so the update rule itself is not the bug. Two
+    ;; passes reach ~84.7%, comfortably above the floor below; this mirrors
+    ;; COMMAND-LINE-TOOLS-MULTICLASS, which already trains this same file with
+    ;; "-n-epoch" 5 rather than the CLI's default of 1.
+    (dotimes (i 2) (train learner iris))
+    ;; DENSE-MULTICLASS-OVR-AROW pins ONE-VS-REST + AROW at 73.333336% on this
+    ;; dataset and chance is 33%, so 70% is the floor a working implementation
+    ;; must clear.  This is deliberately a bound, not a golden value: the golden
+    ;; values in DENSE-MULTICLASS-AROW below are generated from this same code
+    ;; and so cannot be evidence that the update rule is right.
+    (ok (> (test learner iris :quiet-p t) 70.0))))
+
+(deftest multiclass-arow-rejects-two-classes
+  ;; With N-CLASS 2, N-CLASS-OF returns 2, so CLOL-PREDICT's
+  ;; (> (n-class-of learner) 2) is false and the script reads labels as +-1
+  ;; instead of 0..K-1 -- silently wrong output rather than an error.  ASSERT
+  ;; establishes a CONTINUE restart, so this uses HANDLER-CASE rather than
+  ;; ROVE's SIGNALS, which does not reliably catch conditions under a restart.
+  (ok (handler-case (progn (make-multiclass-arow iris-dim 2 10) nil)
+        (error () t))))
+
+(deftest metadata-of-multiclass-arow
+  (let ((learner (make-multiclass-arow iris-dim 3 10)))
+    (ok (= (dim-of learner) iris-dim))
+    (ok (= (n-class-of learner) 3))
+    (ok (null (sparse-learner? learner)))))
+
+(deftest multiclass-arow-dense-sparse-agree
+  ;; Dense and sparse differ only in storage, not arithmetic, so every learned
+  ;; value must match to the last bit that APPROXIMATELY-EQUAL checks.  The two
+  ;; code paths are independent -- one walks all DIM indices, the other only the
+  ;; NNZ ones -- which makes this a genuine cross-check on the update rule
+  ;; rather than a restatement of golden values generated from it.  Same
+  ;; argument REGRESSION-RLS and REGRESSION-SPARSE-RLS rely on.
+  (let ((dense  (make-multiclass-arow iris-dim 3 10))
+        (sparse (make-sparse-multiclass-arow iris-dim 3 10)))
+    (train dense iris)
+    (train sparse iris.sp)
+    (dotimes (k 3)
+      (ok (approximately-equal (svref (clol::multiclass-arow-weight dense) k)
+                               (svref (clol::sparse-multiclass-arow-weight sparse) k)))
+      (ok (approximately-equal (svref (clol::multiclass-arow-sigma dense) k)
+                               (svref (clol::sparse-multiclass-arow-sigma sparse) k))))
+    (ok (approximately-equal (clol::multiclass-arow-bias dense)
+                             (clol::sparse-multiclass-arow-bias sparse)))
+    (ok (approximately-equal (clol::multiclass-arow-sigma0 dense)
+                             (clol::sparse-multiclass-arow-sigma0 sparse)))
+    (ok (approximately-equal (test dense iris :quiet-p t)
+                             (test sparse iris.sp :quiet-p t)))))
+
+(deftest sparse-multiclass-arow-learns-iris
+  ;; Identical arithmetic to MULTICLASS-AROW-LEARNS-IRIS above, so the same
+  ;; single-unshuffled-pass ordering effect applies: one pass over IRIS.SP
+  ;; lands at ~44.7%, confirmed by MULTICLASS-AROW-DENSE-SPARSE-AGREE holding
+  ;; the sparse path to the same accuracy as the dense path bit-for-bit. Two
+  ;; passes clear the 70% floor, same as the dense test.
+  (let ((learner (make-sparse-multiclass-arow iris-dim 3 10)))
+    (dotimes (i 2) (train learner iris.sp))
+    (ok (> (test learner iris.sp :quiet-p t) 70.0))))
+
+(deftest metadata-of-sparse-multiclass-arow
+  (let ((learner (make-sparse-multiclass-arow iris-dim 3 10)))
+    ;; A sparse learner stores its weight rows as full-length dense vectors, so
+    ;; DIM-OF reads the same width for both representations.
+    (ok (= (dim-of learner) iris-dim))
+    (ok (= (n-class-of learner) 3))
+    (ok (sparse-learner? learner))))
+
+;;; Golden values
+;;;
+;;; Frozen from the implementation, so these cannot by themselves show the update
+;;; rule is right -- MULTICLASS-AROW-LEARNS-IRIS (an accuracy floor),
+;;; MULTICLASS-AROW-DENSE-SPARSE-AGREE (two independent code paths) and a hand
+;;; check against Figure 3 do that.  What these catch is drift: any later change
+;;; to the update rule, to float precision, or to iteration order.
+;;;
+;;; The hand check, for the record: on the first datum of IRIS.SCALE
+;;; (y = 0, x = #(-0.555556 0.25 -0.864407 -0.916667)) every score is 0.0, so
+;;; m = 0, the competitor is class 1, and Figure 3 with mu = 0, Sigma = I and
+;;; r = 10 gives v = 2(x.x + 1) = 5.9172406, beta = alpha = 1/(v + 10) =
+;;; 0.06282496.  Pencil and implementation both then give weight row 0 =
+;;; alpha * x = #(-0.034902785 0.015706241 -0.05430634 -0.057589572), bias 0 =
+;;; 0.062824965, sigma0 0 = 1 - beta = 0.93717504, row 1 the exact negation, and
+;;; row 2 untouched.
+;;;
+;;; The single-pass accuracy below is far lower than DENSE-MULTICLASS-OVR-AROW's
+;;; 73.333336%, and that is expected rather than a defect.  IRIS.SCALE is sorted
+;;; into 50/50/50 class blocks; a top-1 update moves only the true class's row and
+;;; its closest competitor, so after one pass the final block's class is barely
+;;; trained.  ONE-VS-REST updates all K sub-learners on every example and so does
+;;; not care about the ordering.  MULTICLASS-AROW-LEARNS-IRIS uses two epochs for
+;;; exactly this reason.
+
+(deftest dense-multiclass-arow
+  (let ((learner (make-multiclass-arow iris-dim 3 10)))
+    (train learner iris)
+    (ok (approximately-equal (svref (clol::multiclass-arow-weight learner) 0)
+                             #(-0.054501988 0.36527476 -0.248283 -0.21588896)))
+    (ok (approximately-equal (aref (clol::multiclass-arow-bias learner) 0)
+                             -0.14492117))
+    (ok (approximately-equal
+         (multiple-value-bind (accuracy n-correct n-total) (test learner iris)
+           (list accuracy n-correct n-total))
+         '(44.666664 67 150)))))
+
+(deftest sparse-multiclass-arow
+  ;; Same golden values as DENSE-MULTICLASS-AROW: the two representations differ
+  ;; only in storage, which MULTICLASS-AROW-DENSE-SPARSE-AGREE checks directly.
+  (let ((learner (make-sparse-multiclass-arow iris-dim 3 10)))
+    (train learner iris.sp)
+    (ok (approximately-equal (svref (clol::sparse-multiclass-arow-weight learner) 0)
+                             #(-0.054501988 0.36527476 -0.248283 -0.21588896)))
+    (ok (approximately-equal (aref (clol::sparse-multiclass-arow-bias learner) 0)
+                             -0.14492117))
+    (ok (approximately-equal
+         (multiple-value-bind (accuracy n-correct n-total) (test learner iris.sp)
+           (list accuracy n-correct n-total))
+         '(44.666664 67 150)))))
+
+;;; Serialization
+;;;
+;;; Neither multiclass AROW struct caches a function object, so SAVE's TYPECASE
+;;; falls through and CL-STORE handles them directly -- no
+;;; *-CLEAR-FUNCTIONS-FOR-STORE pair was added.  These tests are what makes that
+;;; a checked claim rather than an assumption, and they train the restored
+;;; learner because "restores but cannot train" is the failure mode worth
+;;; guarding.
+
+(deftest save-restore-multiclass-arow
+  (let ((learner (make-multiclass-arow iris-dim 3 10)))
+    (train learner iris)
+    (let ((restored (round-trip learner)))
+      (ok (eq (type-of restored) 'clol::multiclass-arow))
+      (ok (equalp (clol::multiclass-arow-weight learner)
+                  (clol::multiclass-arow-weight restored)))
+      (ok (equalp (clol::multiclass-arow-bias learner)
+                  (clol::multiclass-arow-bias restored)))
+      (ok (equalp (clol::multiclass-arow-sigma learner)
+                  (clol::multiclass-arow-sigma restored)))
+      (ok (= (clol::multiclass-arow-n-class learner)
+             (clol::multiclass-arow-n-class restored)))
+      (ok (equal (multiple-value-list (test learner iris :quiet-p t))
+                 (multiple-value-list (test restored iris :quiet-p t))))
+      (ok (progn (train restored iris) t)))))
+
+(deftest save-restore-sparse-multiclass-arow
+  (let ((learner (make-sparse-multiclass-arow iris-dim 3 10)))
+    (train learner iris.sp)
+    (let ((restored (round-trip learner)))
+      (ok (eq (type-of restored) 'clol::sparse-multiclass-arow))
+      (ok (equalp (clol::sparse-multiclass-arow-weight learner)
+                  (clol::sparse-multiclass-arow-weight restored)))
+      (ok (equalp (clol::sparse-multiclass-arow-bias learner)
+                  (clol::sparse-multiclass-arow-bias restored)))
+      (ok (equalp (clol::sparse-multiclass-arow-sigma learner)
+                  (clol::sparse-multiclass-arow-sigma restored)))
+      (ok (= (clol::sparse-multiclass-arow-n-class learner)
+             (clol::sparse-multiclass-arow-n-class restored)))
+      (ok (equal (multiple-value-list (test learner iris.sp :quiet-p t))
+                 (multiple-value-list (test restored iris.sp :quiet-p t))))
+      (ok (progn (train restored iris.sp) t)))))
+
+(deftest multiclass-arow-test-stream
+  ;; :STREAM must carry the learner's actual class indices, not merely one line
+  ;; per datum -- a count-only check would still pass a stream fed a constant.
+  (let* ((learner (make-multiclass-arow iris-dim 3 10))
+         (lines (progn (train learner iris) (test-output-lines learner iris))))
+    (ok (= (length lines) (length iris)))
+    (ok (every (lambda (line datum)
+                 (= (parse-integer line)
+                    (clol::multiclass-arow-predict learner (cdr datum))))
+               lines iris))))
+
+(deftest sparse-multiclass-arow-test-stream
+  (let* ((learner (make-sparse-multiclass-arow iris-dim 3 10))
+         (lines (progn (train learner iris.sp) (test-output-lines learner iris.sp))))
+    (ok (= (length lines) (length iris.sp)))
+    (ok (every (lambda (line datum)
+                 (= (parse-integer line)
+                    (clol::sparse-multiclass-arow-predict learner (cdr datum))))
+               lines iris.sp))))
+
+(deftest command-line-tools-multiclass-arow
+  ;; -MTYPE 2 selects a native multiclass learner rather than a wrapper, so
+  ;; -TYPE carries no meaning on this path and is left unset.
+  (if (not (roswell-available-p))
+      (skip "roswell is not on PATH")
+      (uiop:with-temporary-file (:pathname model :prefix "clol-cli-" :type "model")
+        (uiop:with-temporary-file (:pathname out :prefix "clol-cli-" :type "out")
+          (let ((dataset (namestring (dataset-path #P"t/dataset/iris.scale"))))
+            (ok-script-run "clol-train" "-dim" "4" "-n-class" "3" "-n-epoch" "5"
+                           "-mtype" "2" "-gamma" "10"
+                           dataset (namestring model))
+            (ok (plusp (file-size model)))
+            ;; Without this, the test would stay green even if -MTYPE 2 were
+            ;; ignored: ECASE TYPE's default (TYPE 1) builds a ONE-VS-REST +
+            ;; AROW learner that would satisfy every other assertion here too.
+            (ok (eq (type-of (restore model)) 'clol::sparse-multiclass-arow))
+            (ok-script-run "clol-predict" dataset (namestring model) (namestring out))
+            (let ((lines (uiop:read-file-lines out)))
+              (ok (= (length lines) (length iris)))
+              (ok (null (set-difference (remove-duplicates lines :test #'string=)
+                                        '("0" "1" "2") :test #'string=)))))))))

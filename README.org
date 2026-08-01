@@ -16,6 +16,7 @@ A collection of machine learning algorithms for online linear classification wri
 *** Multiclass classifier
 - one-vs-rest ( K binary classifier required )
 - one-vs-one ( K*(K-1)/2 binary classifier required )
+- multiclass AROW ( native, K weight vectors in a single learner ) (Crammer, Koby, Alex Kulesza, and Mark Dredze. "Adaptive regularization of weight vectors." Machine Learning 91.2 (2013): 155-187. Figure 3, the top-1 version.)
 
 *** Command line tools
 - Implemented as roswell script
@@ -123,6 +124,19 @@ ONE-VS-REST and ONE-VS-ONE are available for multiclass classification by using 
 (clol:test  arow-1vs1 iris-test)
 ; Accuracy: 98.0%, Correct: 49, Total: 50
 #+END_SRC
+MULTICLASS-AROW is a single learner holding K weight vectors rather than a wrapper around binary classifiers, so it takes its regularization parameter directly instead of a binary classifier type. Each update scores every class to find the true class's closest competitor, then writes only those two weight vectors, where ONE-VS-REST writes all K.
+#+BEGIN_SRC lisp
+;; Define model
+(defparameter mc-arow
+  (clol:make-multiclass-arow iris-dim ; Input data dimension
+                             3        ; Number of class
+                             10))     ; gamma, the regularization parameter
+
+;; Train and test model
+(clol:train mc-arow iris-train)
+(clol:test  mc-arow iris-test)
+#+END_SRC
+For sparse data, CLOL:MAKE-SPARSE-MULTICLASS-AROW takes the same three arguments.
 
 *** Sparse data
 For sparse data (most elements are 0), the data point is a pair of a class label and a instance of SPARSE-VECTOR struct, and a learner with SPARSE- prefix is used. READ-DATA function with SPARSE-P keyword option is available for make such a dataset.
