@@ -932,7 +932,7 @@
     (error () nil)))
 
 (defun run-script (name &rest args)
-  "Run the roswell script NAME with ARGS, returning its exit code and output."
+  "Run the roswell script NAME with ARGS, returning its exit code, stdout and stderr."
   (multiple-value-bind (out err code)
       (uiop:run-program
        (list* "ros"
@@ -942,17 +942,32 @@
        :output :string :error-output :string :ignore-error-status t)
     (values code out err)))
 
+(defun file-size (path)
+  (with-open-file (s path :element-type '(unsigned-byte 8)) (file-length s)))
+
+;;; DEFMAIN wraps every script body in a HANDLER-CASE that prints the condition and
+;;; returns normally, so a failing script still exits 0 -- the exit code cannot
+;;; distinguish a working run from a broken one.  What it prints is the only signal,
+;;; so assert on that.  Likewise UIOP:WITH-TEMPORARY-FILE creates its file up front,
+;;; making PROBE-FILE on the model vacuous; its size is what proves SAVE ran.
+
+(defun ok-script-run (name &rest args)
+  "Run script NAME, asserting it exited cleanly and printed no error."
+  (multiple-value-bind (code stdout stderr) (apply #'run-script name args)
+    (declare (ignore stdout))
+    (ok (zerop code))
+    (ok (string= "" stderr))))
+
 (deftest command-line-tools-binary
   (if (not (roswell-available-p))
       (skip "roswell is not on PATH")
       (uiop:with-temporary-file (:pathname model :prefix "clol-cli-" :type "model")
         (uiop:with-temporary-file (:pathname out :prefix "clol-cli-" :type "out")
           (let ((dataset (namestring (dataset-path #P"t/dataset/a1a"))))
-            (ok (zerop (run-script "clol-train" "-dim" "123" "-n-epoch" "1"
-                                   dataset (namestring model))))
-            (ok (probe-file model))
-            (ok (zerop (run-script "clol-predict" dataset (namestring model)
-                                   (namestring out))))
+            (ok-script-run "clol-train" "-dim" "123" "-n-epoch" "1"
+                           dataset (namestring model))
+            (ok (plusp (file-size model)))
+            (ok-script-run "clol-predict" dataset (namestring model) (namestring out))
             (let ((lines (uiop:read-file-lines out)))
               (ok (= (length lines) (length a1a)))
               ;; A binary model emits the rounded sign, nothing else.
@@ -965,10 +980,10 @@
       (uiop:with-temporary-file (:pathname model :prefix "clol-cli-" :type "model")
         (uiop:with-temporary-file (:pathname out :prefix "clol-cli-" :type "out")
           (let ((dataset (namestring (dataset-path #P"t/dataset/iris.scale"))))
-            (ok (zerop (run-script "clol-train" "-dim" "4" "-n-class" "3" "-n-epoch" "5"
-                                   dataset (namestring model))))
-            (ok (zerop (run-script "clol-predict" dataset (namestring model)
-                                   (namestring out))))
+            (ok-script-run "clol-train" "-dim" "4" "-n-class" "3" "-n-epoch" "5"
+                           dataset (namestring model))
+            (ok (plusp (file-size model)))
+            (ok-script-run "clol-predict" dataset (namestring model) (namestring out))
             (let ((lines (uiop:read-file-lines out)))
               (ok (= (length lines) (length iris)))
               ;; Class indices 0..K-1, not iris.scale's original 1..3 labels.
