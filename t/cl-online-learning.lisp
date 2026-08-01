@@ -1171,6 +1171,10 @@
                   (clol::sparse-multiclass-arow-weight restored)))
       (ok (equalp (clol::sparse-multiclass-arow-bias learner)
                   (clol::sparse-multiclass-arow-bias restored)))
+      (ok (equalp (clol::sparse-multiclass-arow-sigma learner)
+                  (clol::sparse-multiclass-arow-sigma restored)))
+      (ok (= (clol::sparse-multiclass-arow-n-class learner)
+             (clol::sparse-multiclass-arow-n-class restored)))
       (ok (equal (multiple-value-list (test learner iris.sp :quiet-p t))
                  (multiple-value-list (test restored iris.sp :quiet-p t))))
       (ok (progn (train restored iris.sp) t)))))
@@ -1207,6 +1211,10 @@
                            "-mtype" "2" "-gamma" "10"
                            dataset (namestring model))
             (ok (plusp (file-size model)))
+            ;; Without this, the test would stay green even if -MTYPE 2 were
+            ;; ignored: ECASE TYPE's default (TYPE 1) builds a ONE-VS-REST +
+            ;; AROW learner that would satisfy every other assertion here too.
+            (ok (eq (type-of (restore model)) 'clol::sparse-multiclass-arow))
             (ok-script-run "clol-predict" dataset (namestring model) (namestring out))
             (let ((lines (uiop:read-file-lines out)))
               (ok (= (length lines) (length iris)))

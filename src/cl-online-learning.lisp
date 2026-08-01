@@ -1185,7 +1185,7 @@ learner's weight, which is what lets the existing vector operators apply per row
 (defstruct (multiclass-arow (:constructor  %make-multiclass-arow)
                             (:print-object %print-multiclass-arow))
   input-dimension n-class weight bias
-  gamma sigma sigma0 tmp-vec1 tmp-vec2 tmp-vec3 tmp-float)
+  gamma sigma sigma0 tmp-vec1 tmp-vec2 tmp-vec3)
 
 (defun %print-multiclass-arow (obj stream)
   (format stream "#S(MULTICLASS-AROW~%~T:INPUT-DIMENSION ~A~%~T:N-CLASS ~A~%~T:WEIGHT #(~A ...)~%~T:BIAS ~A~%~T:GAMMA ~A~%~T:SIGMA #(~A ...)~%~T:SIGMA0 ~A)"
@@ -1216,8 +1216,7 @@ learner's weight, which is what lets the existing vector operators apply per row
    :sigma0 (make-vec n-class 1.0)
    :tmp-vec1 (make-vec input-dimension 0.0)
    :tmp-vec2 (make-vec input-dimension 0.0)
-   :tmp-vec3 (make-vec input-dimension 0.0)
-   :tmp-float (make-vec 1 0.0)))
+   :tmp-vec3 (make-vec input-dimension 0.0)))
 
 (defun multiclass-arow-predict (learner input)
   (declare (type multiclass-arow learner)
@@ -1244,6 +1243,8 @@ learner's weight, which is what lets the existing vector operators apply per row
     max-i))
 
 ;; training-label should be an integer class index (0 ... K-1)
+;; This range is not checked under (safety 0): an out-of-range label corrupts
+;; memory (an unchecked heap write past WEIGHT/BIAS) rather than signalling.
 (defun multiclass-arow-update (learner input training-label)
   (declare (type multiclass-arow learner)
            (type (simple-array single-float) input)
@@ -1326,7 +1327,7 @@ learner's weight, which is what lets the existing vector operators apply per row
 (defstruct (sparse-multiclass-arow (:constructor  %make-sparse-multiclass-arow)
                                    (:print-object %print-sparse-multiclass-arow))
   input-dimension n-class weight bias
-  gamma sigma sigma0 tmp-vec1 tmp-vec2 tmp-vec3 tmp-float)
+  gamma sigma sigma0 tmp-vec1 tmp-vec2 tmp-vec3)
 
 (defun %print-sparse-multiclass-arow (obj stream)
   (format stream "#S(SPARSE-MULTICLASS-AROW~%~T:INPUT-DIMENSION ~A~%~T:N-CLASS ~A~%~T:WEIGHT #(~A ...)~%~T:BIAS ~A~%~T:GAMMA ~A~%~T:SIGMA #(~A ...)~%~T:SIGMA0 ~A)"
@@ -1354,8 +1355,7 @@ learner's weight, which is what lets the existing vector operators apply per row
    :sigma0 (make-vec n-class 1.0)
    :tmp-vec1 (make-vec input-dimension 0.0)
    :tmp-vec2 (make-vec input-dimension 0.0)
-   :tmp-vec3 (make-vec input-dimension 0.0)
-   :tmp-float (make-vec 1 0.0)))
+   :tmp-vec3 (make-vec input-dimension 0.0)))
 
 (defun sparse-multiclass-arow-predict (learner input)
   (declare (type sparse-multiclass-arow learner)
@@ -1380,6 +1380,8 @@ learner's weight, which is what lets the existing vector operators apply per row
     max-i))
 
 ;; training-label should be an integer class index (0 ... K-1)
+;; This range is not checked under (safety 0): an out-of-range label corrupts
+;; memory (an unchecked heap write past WEIGHT/BIAS) rather than signalling.
 (defun sparse-multiclass-arow-update (learner input training-label)
   (declare (type sparse-multiclass-arow learner)
            (type sparse-vector input)
