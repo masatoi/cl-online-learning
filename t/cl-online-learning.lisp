@@ -3,24 +3,68 @@
   (:use :cl
         :cl-online-learning
         :cl-online-learning.vector
-	:cl-online-learning.utils
-        :prove))
+        :cl-online-learning.utils
+        :rove)
+  ;; CL-ONLINE-LEARNING:TEST and ROVE's re-exported ROVE/CORE/RESULT:TEST name-conflict
+  ;; under plain :USE (ANSI 11.1.1.2.5). Every learner section calls (test learner data),
+  ;; so CL-ONLINE-LEARNING:TEST must win.
+  (:shadowing-import-from :cl-online-learning :test))
 (in-package :cl-online-learning.test)
 
-;; NOTE: To run this test file, execute `(asdf:test-system :cl-online-learning)' in your Lisp.
-
-(defparameter a1a-dim 123)
-(defvar a1a)
-
-(plan nil)
+;;; NOTE: To run this test file, execute `(asdf:test-system :cl-online-learning)' in your
+;;; Lisp, or `rove cl-online-learning-test.asd' from a shell.
 
 (defun approximately-equal (x y &optional (delta 0.001))
+  "Compare numbers, vectors or lists elementwise within DELTA."
   (flet ((andf (x y) (and x y))
          (close? (x y) (< (abs (- x y)) delta)))
     (etypecase x
       (number (close? x y))
       (vector (reduce #'andf (map 'vector #'close? x y)))
       (list (reduce #'andf (mapcar #'close? x y))))))
+
+(defparameter a1a-dim 123)
+(defparameter iris-dim 4)
+
+(defun dataset-path (name)
+  (merge-pathnames name (asdf:system-source-directory :cl-online-learning-test)))
+
+(defparameter a1a
+  (read-data (dataset-path #P"t/dataset/a1a") a1a-dim))
+(defparameter a1a.sp
+  (read-data (dataset-path #P"t/dataset/a1a") a1a-dim :sparse-p t))
+(defparameter iris
+  (read-data (dataset-path #P"t/dataset/iris.scale") iris-dim :multiclass-p t))
+(defparameter iris.sp
+  (read-data (dataset-path #P"t/dataset/iris.scale") iris-dim :multiclass-p t :sparse-p t))
+
+(deftest read-a1a
+  (ok (equalp (car a1a)
+              '(-1.0
+                . #(0.0 0.0 1.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 1.0 0.0 0.0 1.0 0.0 0.0 0.0 0.0
+                    1.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0
+                    0.0 0.0 1.0 0.0 0.0 1.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0
+                    1.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 1.0 0.0 0.0 1.0 0.0 0.0 0.0 0.0 0.0
+                    1.0 0.0 1.0 1.0 0.0 0.0 0.0 1.0 0.0 0.0 1.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0
+                    0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0
+                    0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0)))))
+
+(deftest read-a1a-sparse
+  (ok (equalp (list (caar a1a.sp)
+                    (sparse-vector-index-vector (cdar a1a.sp))
+                    (sparse-vector-value-vector (cdar a1a.sp)))
+              '(-1.0
+                #(2 10 13 18 38 41 54 63 66 72 74 75 79 82)
+                #(1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0)))))
+
+(deftest read-iris
+  (ok (equalp (car iris) '(0 . #(-0.555556 0.25 -0.864407 -0.916667)))))
+
+(deftest read-iris-sparse
+  (ok (equalp (sparse-vector-value-vector (cdar iris.sp))
+              #(-0.555556 0.25 -0.864407 -0.916667))))
+
+#|
 
 ;;;;;;;;;;;;;;;; Dence, Binary ;;;;;;;;;;;;;;;;;
 (format t ";;;;;;;;;;;;;;;; Dence, Binary ;;;;;;;;;;;;;;;;;~%")
@@ -912,5 +956,4 @@
                                  :separator '(#\Newline))))
     (length a1a))
 
-;;; ende
-(finalize)
+|#

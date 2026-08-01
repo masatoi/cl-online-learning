@@ -11,12 +11,10 @@
   :author ""
   :license ""
   :depends-on (:cl-online-learning
-               :prove)
+               :rove)
   :components ((:module "t"
                 :components
-                ((:test-file "cl-online-learning"))))
-
-  :defsystem-depends-on (:prove-asdf)
-  :perform (test-op :after (op c)
-                    (funcall (intern #.(string :run-test-system) :prove-asdf) c)
-                    (asdf:clear-system c)))
+                ((:file "cl-online-learning"))))
+  :perform (test-op (o c)
+             (unless (uiop:symbol-call :rove :run c)
+               (error "Tests failed."))))
