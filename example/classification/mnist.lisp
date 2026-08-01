@@ -32,6 +32,26 @@
   (train mnist-arow mnist-train)
   (test mnist-arow mnist-test)))
 
+;;; Multiclass AROW: a native multiclass learner rather than a wrapper.
+;; One struct holds all 10 weight vectors, and each update moves only the true class's
+;; row and its closest competitor's -- the top-1 update, Figure 3 of Crammer, Kulesza &
+;; Dredze, "Adaptive regularization of weight vectors", Machine Learning 91(2), 2013.
+;; So it takes gamma directly instead of a binary classifier type and its parameters.
+;;
+;; 3.9 sec Accuracy: 92.77%, Correct: 9277, Total: 10000
+;; Roughly half the time of the ONE-VS-ONE AROW above (7.1 sec on the same run, same
+;; 94.65% as its comment records), for about 1.9 points less accuracy.  It also holds 23
+;; vectors of length 784 against ONE-VS-ONE's 180, since ONE-VS-ONE needs 45 sub-learners
+;; and each preallocates its own scratch -- the gap widens as the number of classes grows.
+;;
+;; gamma is near-flat here: 100.0 gives 92.78%, and larger values are worse (1000.0 ->
+;; 92.51%, 3000.0 -> 92.31%).  On the unscaled mnist it wants a much larger gamma, so
+;; this is a property of the scaling, not a good default to carry elsewhere.
+(defparameter mnist-mc-arow (make-multiclass-arow mnist-dim mnist-class 10.0))
+(time (loop repeat 10 do
+  (train mnist-mc-arow mnist-train)
+  (test mnist-mc-arow mnist-test)))
+
 (defparameter mnist-scw (make-one-vs-one mnist-dim mnist-class 'scw 0.9 0.1))
 (time (loop repeat 10 do
   (train mnist-scw mnist-train)
@@ -160,6 +180,18 @@
 
 (defparameter mnist-arow.sp (make-one-vs-one mnist-dim mnist-class 'sparse-arow 10.0))
 (time (loop repeat 8 do (train mnist-arow.sp mnist-train.sp)))
+
+;; Sparse multiclass AROW.  Same arithmetic as the dense version, only the traversal
+;; differs, so the accuracy below is identical to MNIST-MC-AROW's above -- which is what
+;; the MULTICLASS-AROW-DENSE-SPARSE-AGREE test asserts, here confirmed on real 10-class
+;; data.  MNIST is about 19% dense (150 of 784 features), so sparse is ~4x faster.
+;;
+;; 0.9 sec Accuracy: 92.77%, Correct: 9277, Total: 10000
+;; ONE-VS-ONE + SPARSE-AROW on the same run: 1.9 sec, 94.65%.
+(defparameter mnist-mc-arow.sp (make-sparse-multiclass-arow mnist-dim mnist-class 10.0))
+(time (loop repeat 10 do
+  (train mnist-mc-arow.sp mnist-train.sp)
+  (test mnist-mc-arow.sp mnist-test.sp)))
 
 ;; Evaluation took:
 ;;   1.347 seconds of real time
