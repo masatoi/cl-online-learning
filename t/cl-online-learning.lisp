@@ -943,20 +943,27 @@
     (values code out err)))
 
 (defun file-size (path)
-  (with-open-file (s path :element-type '(unsigned-byte 8)) (file-length s)))
+  (if (probe-file path)
+      (with-open-file (s path :element-type '(unsigned-byte 8)) (file-length s))
+      0))
 
 ;;; DEFMAIN wraps every script body in a HANDLER-CASE that prints the condition and
 ;;; returns normally, so a failing script still exits 0 -- the exit code cannot
-;;; distinguish a working run from a broken one.  What it prints is the only signal,
-;;; so assert on that.  Likewise UIOP:WITH-TEMPORARY-FILE creates its file up front,
-;;; making PROBE-FILE on the model vacuous; its size is what proves SAVE ran.
+;;; distinguish a working run from a broken one.  Both of its handlers do print the
+;;; usage text to standard output, and a successful run never does, so that is the
+;;; marker to assert on.  Not an empty stderr: that would couple these tests to every
+;;; compile-time style-warning the subprocess happens to emit.
+;;;
+;;; Likewise UIOP:WITH-TEMPORARY-FILE creates its file up front, so PROBE-FILE on the
+;;; model proves nothing; its size is what proves SAVE ran.
 
 (defun ok-script-run (name &rest args)
-  "Run script NAME, asserting it exited cleanly and printed no error."
+  "Run script NAME, asserting it exited cleanly and did not print its usage text."
   (multiple-value-bind (code stdout stderr) (apply #'run-script name args)
-    (declare (ignore stdout))
     (ok (zerop code))
-    (ok (string= "" stderr))))
+    (ok (not (search "Usage:" stdout)) (format nil "~A printed no usage text" name))
+    ;; Surfaced only on failure, so the condition DEFMAIN swallowed is visible.
+    (ok (not (search "Error:" stderr)) (format nil "~A signalled no error" name))))
 
 (deftest command-line-tools-binary
   (if (not (roswell-available-p))
