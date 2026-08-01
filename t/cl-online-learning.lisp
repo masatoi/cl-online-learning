@@ -1351,3 +1351,40 @@
     (ok (= (dim-of learner) a1a-dim))
     (ok (= (n-class-of learner) 2))
     (ok (sparse-learner? learner))))
+
+;;; Golden values
+;;;
+;;; Frozen from the implementation, so these cannot themselves show the update rule is
+;;; right -- LR+FTRL-LEARNS-A1A (an accuracy floor), LR+FTRL-WEIGHT-CACHE-INVARIANT,
+;;; LR+FTRL-DENSE-SPARSE-AGREE (two independent code paths) and a hand check against
+;;; Algorithm 1 do that.  What these catch is drift: any later change to the update
+;;; rule, to float precision, or to iteration order.
+;;;
+;;; A single pass, matching every other golden-value test here.  Only the first eight
+;;; weights are pinned; the cache invariant already covers the whole vector.
+
+(deftest dense-lr+ftrl
+  (let ((learner (make-lr+ftrl a1a-dim 0.1 1.0 1.0 1.0)))
+    (train learner a1a)
+    (ok (approximately-equal (subseq (clol::lr+ftrl-weight learner) 0 8)
+                             #(-0.7377003 -0.34051764 0.012638128 0.29802862 0.13804677
+                               -0.15894848 -0.055718463 0.09639014)))
+    (ok (approximately-equal (clol::lr+ftrl-bias learner) -0.2614437))
+    (ok (approximately-equal
+         (multiple-value-bind (accuracy n-correct n-total) (test learner a1a)
+           (list accuracy n-correct n-total))
+         '(82.928345 1331 1605)))))
+
+(deftest sparse-lr+ftrl
+  ;; Same golden values as DENSE-LR+FTRL: the two representations differ only in
+  ;; traversal, which LR+FTRL-DENSE-SPARSE-AGREE checks directly.
+  (let ((learner (make-sparse-lr+ftrl a1a-dim 0.1 1.0 1.0 1.0)))
+    (train learner a1a.sp)
+    (ok (approximately-equal (subseq (clol::sparse-lr+ftrl-weight learner) 0 8)
+                             #(-0.7377003 -0.34051764 0.012638128 0.29802862 0.13804677
+                               -0.15894848 -0.055718463 0.09639014)))
+    (ok (approximately-equal (clol::sparse-lr+ftrl-bias learner) -0.2614437))
+    (ok (approximately-equal
+         (multiple-value-bind (accuracy n-correct n-total) (test learner a1a.sp)
+           (list accuracy n-correct n-total))
+         '(82.928345 1331 1605)))))
