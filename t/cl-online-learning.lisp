@@ -1043,3 +1043,44 @@
     (ok (= (dim-of learner) iris-dim))
     (ok (= (n-class-of learner) 3))
     (ok (null (sparse-learner? learner)))))
+
+(deftest multiclass-arow-dense-sparse-agree
+  ;; Dense and sparse differ only in storage, not arithmetic, so every learned
+  ;; value must match to the last bit that APPROXIMATELY-EQUAL checks.  The two
+  ;; code paths are independent -- one walks all DIM indices, the other only the
+  ;; NNZ ones -- which makes this a genuine cross-check on the update rule
+  ;; rather than a restatement of golden values generated from it.  Same
+  ;; argument REGRESSION-RLS and REGRESSION-SPARSE-RLS rely on.
+  (let ((dense  (make-multiclass-arow iris-dim 3 10))
+        (sparse (make-sparse-multiclass-arow iris-dim 3 10)))
+    (train dense iris)
+    (train sparse iris.sp)
+    (dotimes (k 3)
+      (ok (approximately-equal (svref (clol::multiclass-arow-weight dense) k)
+                               (svref (clol::sparse-multiclass-arow-weight sparse) k)))
+      (ok (approximately-equal (svref (clol::multiclass-arow-sigma dense) k)
+                               (svref (clol::sparse-multiclass-arow-sigma sparse) k))))
+    (ok (approximately-equal (clol::multiclass-arow-bias dense)
+                             (clol::sparse-multiclass-arow-bias sparse)))
+    (ok (approximately-equal (clol::multiclass-arow-sigma0 dense)
+                             (clol::sparse-multiclass-arow-sigma0 sparse)))
+    (ok (approximately-equal (test dense iris :quiet-p t)
+                             (test sparse iris.sp :quiet-p t)))))
+
+(deftest sparse-multiclass-arow-learns-iris
+  ;; Identical arithmetic to MULTICLASS-AROW-LEARNS-IRIS above, so the same
+  ;; single-unshuffled-pass ordering effect applies: one pass over IRIS.SP
+  ;; lands at ~44.7%, confirmed by MULTICLASS-AROW-DENSE-SPARSE-AGREE holding
+  ;; the sparse path to the same accuracy as the dense path bit-for-bit. Two
+  ;; passes clear the 70% floor, same as the dense test.
+  (let ((learner (make-sparse-multiclass-arow iris-dim 3 10)))
+    (dotimes (i 2) (train learner iris.sp))
+    (ok (> (test learner iris.sp :quiet-p t) 70.0))))
+
+(deftest metadata-of-sparse-multiclass-arow
+  (let ((learner (make-sparse-multiclass-arow iris-dim 3 10)))
+    ;; A sparse learner stores its weight rows as full-length dense vectors, so
+    ;; DIM-OF reads the same width for both representations.
+    (ok (= (dim-of learner) iris-dim))
+    (ok (= (n-class-of learner) 3))
+    (ok (sparse-learner? learner))))
