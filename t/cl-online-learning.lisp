@@ -1388,3 +1388,61 @@
          (multiple-value-bind (accuracy n-correct n-total) (test learner a1a.sp)
            (list accuracy n-correct n-total))
          '(82.928345 1331 1605)))))
+
+;;; Serialization
+;;;
+;;; Neither FTRL struct caches a function object, so SAVE's TYPECASE falls through and
+;;; CL-STORE handles them directly -- no *-CLEAR-FUNCTIONS-FOR-STORE pair was added.
+;;; These tests are what make that a checked claim, and they train the restored learner
+;;; because "restores but cannot train" is the failure mode worth guarding.
+
+(deftest save-restore-lr+ftrl
+  (let ((learner (make-lr+ftrl a1a-dim 0.1 1.0 1.0 1.0)))
+    (train learner a1a)
+    (let ((restored (round-trip learner)))
+      (ok (eq (type-of restored) 'clol::lr+ftrl))
+      (ok (equalp (clol::lr+ftrl-weight learner) (clol::lr+ftrl-weight restored)))
+      ;; Z and N are the actual model state -- WEIGHT is derived from them, so a round
+      ;; trip that dropped them would still look fine until the next update.
+      (ok (equalp (clol::lr+ftrl-z learner) (clol::lr+ftrl-z restored)))
+      (ok (equalp (clol::lr+ftrl-n learner) (clol::lr+ftrl-n restored)))
+      (ok (= (clol::lr+ftrl-bias learner) (clol::lr+ftrl-bias restored)))
+      (ok (equal (multiple-value-list (test learner a1a :quiet-p t))
+                 (multiple-value-list (test restored a1a :quiet-p t))))
+      (ok (progn (train restored a1a) t))
+      ;; And the cache invariant must survive the round trip and the retrain.
+      (ok (= (ftrl-cache-mismatches restored) 0)))))
+
+(deftest save-restore-sparse-lr+ftrl
+  (let ((learner (make-sparse-lr+ftrl a1a-dim 0.1 1.0 1.0 1.0)))
+    (train learner a1a.sp)
+    (let ((restored (round-trip learner)))
+      (ok (eq (type-of restored) 'clol::sparse-lr+ftrl))
+      (ok (equalp (clol::sparse-lr+ftrl-weight learner)
+                  (clol::sparse-lr+ftrl-weight restored)))
+      (ok (equalp (clol::sparse-lr+ftrl-z learner) (clol::sparse-lr+ftrl-z restored)))
+      (ok (equalp (clol::sparse-lr+ftrl-n learner) (clol::sparse-lr+ftrl-n restored)))
+      (ok (= (clol::sparse-lr+ftrl-bias learner) (clol::sparse-lr+ftrl-bias restored)))
+      (ok (equal (multiple-value-list (test learner a1a.sp :quiet-p t))
+                 (multiple-value-list (test restored a1a.sp :quiet-p t))))
+      (ok (progn (train restored a1a.sp) t))
+      (ok (= (sparse-ftrl-cache-mismatches restored) 0)))))
+
+;;; The multiclass wrappers
+;;;
+;;; No wrapper code was changed for FTRL.  MAKE-ONE-VS-REST resolves MAKE-<TYPE>,
+;;; <TYPE>-WEIGHT, <TYPE>-BIAS, <TYPE>-UPDATE and <TYPE>-PREDICT by interning names at
+;;; runtime, so a naming or slot mistake surfaces here and nowhere else.
+
+(deftest multiclass-ovr-sparse-lr+ftrl
+  ;; lambda1 is 0.0: iris.scale has only four features, so any meaningful L1 would
+  ;; zero the entire model and the test would assert nothing about the wrapper.
+  ;;
+  ;; Measured accuracy after 10 epochs was 87.33%; 70% is a round number comfortably
+  ;; below that and well above the 33% chance floor on this 3-class dataset.
+  (let ((learner (make-one-vs-rest iris-dim 3 'sparse-lr+ftrl 0.1 1.0 0.0 1.0)))
+    (dotimes (i 10) (train learner iris.sp))
+    (ok (= (n-class-of learner) 3))
+    (ok (= (dim-of learner) iris-dim))
+    (ok (sparse-learner? learner))
+    (ok (> (test learner iris.sp :quiet-p t) 70))))
