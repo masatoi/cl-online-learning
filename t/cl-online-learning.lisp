@@ -1482,3 +1482,19 @@
     (ok (= (dim-of learner) iris-dim))
     (ok (sparse-learner? learner))
     (ok (> (test learner iris.sp :quiet-p t) 70))))
+
+(deftest multiclass-ovo-sparse-lr+ftrl
+  ;; Not redundant with the ONE-VS-REST test above: the two wrappers resolve different
+  ;; functions.  MAKE-ONE-VS-REST caches <TYPE>-WEIGHT and <TYPE>-BIAS and scores each
+  ;; class itself, while MAKE-ONE-VS-ONE caches <TYPE>-PREDICT and votes.  A learner
+  ;; whose -PREDICT were missing or misnamed would pass the ONE-VS-REST test and fail
+  ;; only here.
+  ;;
+  ;; Measured accuracy after 10 epochs was 90.67%; the 70% floor is the same round
+  ;; number used above, well clear of the 33% chance floor on this 3-class dataset.
+  (let ((learner (make-one-vs-one iris-dim 3 'sparse-lr+ftrl 0.1 1.0 0.0 1.0)))
+    (dotimes (i 10) (train learner iris.sp))
+    (ok (= (n-class-of learner) 3))
+    (ok (= (dim-of learner) iris-dim))
+    (ok (sparse-learner? learner))
+    (ok (> (test learner iris.sp :quiet-p t) 70))))
