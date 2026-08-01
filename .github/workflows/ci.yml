@@ -18,9 +18,9 @@ jobs:
           LISP: ${{ matrix.lisp }}
         run: |
           curl -L https://raw.githubusercontent.com/roswell/roswell/master/scripts/install-for-ci.sh | sh
-      - name: Install Prove and dependencies
-        run: ros install prove cl-store masatoi/cl-libsvm-format
+      - name: Install Rove and dependencies
+        run: ros install rove cl-store masatoi/cl-libsvm-format
       - name: Run tests
         run: |
           PATH="~/.roswell/bin:$PATH"
-          run-prove cl-online-learning-test.asd
+          rove cl-online-learning-test.asd
