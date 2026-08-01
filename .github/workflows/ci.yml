@@ -7,9 +7,17 @@ jobs:
     name: ${{ matrix.lisp }} on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
+      # Without this, one broken leg cancels the others before they report,
+      # hiding every other platform's result behind it.
+      fail-fast: false
       matrix:
         lisp: [sbcl-bin, ccl-bin]
         os: [ubuntu-latest, macOS-latest]
+        exclude:
+          # macos-latest runners are arm64, and CCL no longer ships a Darwin
+          # binary for Roswell to install: "Not supported platform arm64."
+          - lisp: ccl-bin
+            os: macOS-latest
 
     steps:
       - uses: actions/checkout@v1
@@ -18,9 +26,14 @@ jobs:
           LISP: ${{ matrix.lisp }}
         run: |
           curl -L https://raw.githubusercontent.com/roswell/roswell/master/scripts/install-for-ci.sh | sh
-      - name: Install Prove and dependencies
-        run: ros install prove cl-store masatoi/cl-libsvm-format
+      - name: Install Rove and dependencies
+        run: ros install rove cl-store masatoi/cl-libsvm-format
       - name: Run tests
         run: |
           PATH="~/.roswell/bin:$PATH"
-          run-prove cl-online-learning-test.asd
+          # Not `rove cl-online-learning-test.asd': rove's CLI bypasses test-op, and on
+          # ccl-bin it printed not one assertion and still exited 0. This goes through
+          # test-op, whose :perform fails both on a red suite and on a suite that
+          # registered no tests. It relies on install-for-ci.sh above having registered
+          # (:tree "$GITHUB_WORKSPACE/") in the ASDF source registry.
+          ./t/run-test.ros
