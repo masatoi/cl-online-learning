@@ -13,6 +13,11 @@ jobs:
       matrix:
         lisp: [sbcl-bin, ccl-bin]
         os: [ubuntu-latest, macOS-latest]
+        exclude:
+          # macos-latest runners are arm64, and CCL no longer ships a Darwin
+          # binary for Roswell to install: "Not supported platform arm64."
+          - lisp: ccl-bin
+            os: macOS-latest
 
     steps:
       - uses: actions/checkout@v1
