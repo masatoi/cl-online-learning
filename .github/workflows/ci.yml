@@ -26,7 +26,9 @@ jobs:
       - name: Run tests
         run: |
           PATH="~/.roswell/bin:$PATH"
-          # rove's CLI resolves this .asd via (asdf:load-system (pathname-name file)),
-          # with no load-asd step -- it depends on install-for-ci.sh above having
-          # already registered (:tree "$GITHUB_WORKSPACE/") in the ASDF source registry.
-          rove cl-online-learning-test.asd
+          # Not `rove cl-online-learning-test.asd': rove's CLI bypasses test-op, and on
+          # ccl-bin it printed not one assertion and still exited 0. This goes through
+          # test-op, whose :perform fails both on a red suite and on a suite that
+          # registered no tests. It relies on install-for-ci.sh above having registered
+          # (:tree "$GITHUB_WORKSPACE/") in the ASDF source registry.
+          ./t/run-test.ros
