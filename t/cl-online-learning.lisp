@@ -1230,6 +1230,33 @@
 ;;;; materialises it into the WEIGHT slot so DEFINE-LEARNER's generated -PREDICT
 ;;;; can be reused, which also makes ONE-VS-REST and ONE-VS-ONE work unchanged.
 
+(deftest ftrl-weight-of-known-values
+  ;; LR+FTRL-WEIGHT-CACHE-INVARIANT and LR+FTRL-DENSE-SPARSE-AGREE both compare against
+  ;; CLOL::FTRL-WEIGHT-OF itself, so a wrong FTRL-WEIGHT-OF would satisfy both of them
+  ;; -- neither pins the function against a value derived independently of the code.
+  ;; This test does: each expected value below is worked out by hand from Algorithm 1's
+  ;; formula, w = 0 if |z| <= lambda1, else -(z - sgn(z) lambda1) / ((beta+sqrt(n))/alpha
+  ;; + lambda2), never by calling FTRL-WEIGHT-OF.
+  ;;
+  ;; Case 1: z=0.5, n=0.25, alpha=0.1, beta=1.0, lambda1=0.0, lambda2=1.0.
+  ;;   |z| > lambda1, so the general branch applies. sqrt(n) = 0.5, so the denominator
+  ;;   is (1.0 + 0.5)/0.1 + 1.0 = 15.0 + 1.0 = 16.0, and the numerator -(0.5 - 0) = -0.5.
+  ;;   w = -0.5 / 16.0 = -0.03125.
+  (ok (approximately-equal (clol::ftrl-weight-of 0.5 0.25 0.1 1.0 0.0 1.0) -0.03125))
+  ;; Case 2: same z, n, alpha, beta as case 1, but lambda2 = 0.0, dropping the "+ 1.0"
+  ;;   from the denominator: (1.0 + 0.5)/0.1 + 0.0 = 15.0.
+  ;;   w = -0.5 / 15.0 = -0.033333...
+  (ok (approximately-equal (clol::ftrl-weight-of 0.5 0.25 0.1 1.0 0.0 0.0) -0.033333333))
+  ;; Case 3: z = -0.5 instead of 0.5, everything else as case 1. lambda1 is 0.0, so
+  ;;   sgn(z) never enters the numerator; only z's own sign does: -(-0.5 - 0) = 0.5.
+  ;;   Denominator is unchanged at 16.0, so w = 0.5 / 16.0 = 0.03125 -- exactly case 1
+  ;;   with the sign flipped.
+  (ok (approximately-equal (clol::ftrl-weight-of -0.5 0.25 0.1 1.0 0.0 1.0) 0.03125))
+  ;; Case 4: z=0.5, lambda1=1.0, so |z| <= lambda1 and the L1 branch fires: w must be
+  ;;   EXACTLY 0.0, not merely close to it -- that exactness is the point of L1 here, so
+  ;;   this one case uses = rather than APPROXIMATELY-EQUAL.
+  (ok (= (clol::ftrl-weight-of 0.5 0.25 0.1 1.0 1.0 1.0) 0.0)))
+
 (defun ftrl-cache-mismatches (learner)
   "Count coordinates where LEARNER's cached WEIGHT differs from a freshly derived w."
   (let ((w (clol::lr+ftrl-weight learner))
@@ -1295,6 +1322,10 @@
   (ok (handler-case (progn (make-lr+ftrl a1a-dim -0.1 1.0 1.0 1.0) nil)
         (error () t)))
   (ok (handler-case (progn (make-lr+ftrl a1a-dim 0.1 1.0 -1.0 1.0) nil)
+        (error () t)))
+  (ok (handler-case (progn (make-lr+ftrl a1a-dim 0.1 -1.0 1.0 1.0) nil)
+        (error () t)))
+  (ok (handler-case (progn (make-lr+ftrl a1a-dim 0.1 1.0 1.0 -1.0) nil)
         (error () t))))
 
 (defun sparse-ftrl-cache-mismatches (learner)
@@ -1435,8 +1466,13 @@
 ;;; runtime, so a naming or slot mistake surfaces here and nowhere else.
 
 (deftest multiclass-ovr-sparse-lr+ftrl
-  ;; lambda1 is 0.0: iris.scale has only four features, so any meaningful L1 would
-  ;; zero the entire model and the test would assert nothing about the wrapper.
+  ;; lambda1 is 0.0, not because a non-zero value would zero the model -- it does not:
+  ;; measured over ten passes on iris.scale, non-zero weight counts are 12 / 11 / 9 / 8
+  ;; and accuracy is 87.3% / 87.3% / 86.0% / 79.3% at lambda1 0.0 / 1.0 / 10.0 / 100.0,
+  ;; so the model is never zeroed.  The reason is that this test checks that the
+  ;; multiclass wrapper resolves the learner's functions by name and trains correctly;
+  ;; mixing L1 shrinkage into that would make a wrapper failure and a regularization
+  ;; effect indistinguishable.
   ;;
   ;; Measured accuracy after 10 epochs was 87.33%; 70% is a round number comfortably
   ;; below that and well above the 33% chance floor on this 3-class dataset.

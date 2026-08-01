@@ -573,6 +573,11 @@
 ;;;; one.  That cache is exact because w_i is a pure function of (z_i, n_i), which change
 ;;;; only for the coordinates an update touches -- but ONLY if it is refreshed at the END
 ;;;; of the update.  See the ordering comment in LR+FTRL-UPDATE.
+;;;;
+;;;; w_i is also a function of ALPHA, BETA, LAMBDA1 and LAMBDA2 -- ordinary DEFSTRUCT
+;;;; slots with SETF accessors, not just (z_i, n_i).  Treat those four as immutable after
+;;;; construction: every coordinate's cached weight depends on all four, so changing one
+;;;; post-construction desyncs the whole cache, not just the coordinates touched since.
 
 (declaim (inline ftrl-weight-of))
 (defun ftrl-weight-of (zi ni alpha beta lambda1 lambda2)
@@ -608,23 +613,30 @@
   (check-type lambda1 number)
   (check-type lambda2 number)
   (assert (> input-dimension 0))
-  ;; ALPHA divides in every weight derivation.
-  (assert (< 0.0 alpha))
-  (assert (<= 0.0 beta))
-  (assert (<= 0.0 lambda1))
-  (assert (<= 0.0 lambda2))
-  (%make-lr+ftrl
-   :input-dimension input-dimension
-   :weight (make-vec input-dimension 0.0)
-   :bias 0.0
-   :alpha (coerce alpha 'single-float)
-   :beta (coerce beta 'single-float)
-   :lambda1 (coerce lambda1 'single-float)
-   :lambda2 (coerce lambda2 'single-float)
-   :z (make-vec input-dimension 0.0)
-   :n (make-vec input-dimension 0.0)
-   :z0 0.0
-   :n0 0.0))
+  (let ((alpha (coerce alpha 'single-float))
+        (beta (coerce beta 'single-float))
+        (lambda1 (coerce lambda1 'single-float))
+        (lambda2 (coerce lambda2 'single-float)))
+    ;; Assert AFTER coercion, not before.  A positive double such as 1d-50 satisfies
+    ;; (< 0.0 alpha) yet underflows to exactly 0.0 as a single-float, and ALPHA divides
+    ;; in every weight derivation -- the model would fill with NaN on the first update
+    ;; and signal nothing.
+    (assert (< 0.0 alpha))
+    (assert (<= 0.0 beta))
+    (assert (<= 0.0 lambda1))
+    (assert (<= 0.0 lambda2))
+    (%make-lr+ftrl
+     :input-dimension input-dimension
+     :weight (make-vec input-dimension 0.0)
+     :bias 0.0
+     :alpha alpha
+     :beta beta
+     :lambda1 lambda1
+     :lambda2 lambda2
+     :z (make-vec input-dimension 0.0)
+     :n (make-vec input-dimension 0.0)
+     :z0 0.0
+     :n0 0.0)))
 
 (define-learner lr+ftrl (learner input training-label)
   (let ((weight (lr+ftrl-weight learner))
@@ -1089,22 +1101,30 @@
   (check-type lambda1 number)
   (check-type lambda2 number)
   (assert (> input-dimension 0))
-  (assert (< 0.0 alpha))
-  (assert (<= 0.0 beta))
-  (assert (<= 0.0 lambda1))
-  (assert (<= 0.0 lambda2))
-  (%make-sparse-lr+ftrl
-   :input-dimension input-dimension
-   :weight (make-vec input-dimension 0.0)
-   :bias 0.0
-   :alpha (coerce alpha 'single-float)
-   :beta (coerce beta 'single-float)
-   :lambda1 (coerce lambda1 'single-float)
-   :lambda2 (coerce lambda2 'single-float)
-   :z (make-vec input-dimension 0.0)
-   :n (make-vec input-dimension 0.0)
-   :z0 0.0
-   :n0 0.0))
+  (let ((alpha (coerce alpha 'single-float))
+        (beta (coerce beta 'single-float))
+        (lambda1 (coerce lambda1 'single-float))
+        (lambda2 (coerce lambda2 'single-float)))
+    ;; Assert AFTER coercion, not before.  A positive double such as 1d-50 satisfies
+    ;; (< 0.0 alpha) yet underflows to exactly 0.0 as a single-float, and ALPHA divides
+    ;; in every weight derivation -- the model would fill with NaN on the first update
+    ;; and signal nothing.
+    (assert (< 0.0 alpha))
+    (assert (<= 0.0 beta))
+    (assert (<= 0.0 lambda1))
+    (assert (<= 0.0 lambda2))
+    (%make-sparse-lr+ftrl
+     :input-dimension input-dimension
+     :weight (make-vec input-dimension 0.0)
+     :bias 0.0
+     :alpha alpha
+     :beta beta
+     :lambda1 lambda1
+     :lambda2 lambda2
+     :z (make-vec input-dimension 0.0)
+     :n (make-vec input-dimension 0.0)
+     :z0 0.0
+     :n0 0.0)))
 
 (define-learner sparse-lr+ftrl (learner input training-label)
   (let ((weight (sparse-lr+ftrl-weight learner))
