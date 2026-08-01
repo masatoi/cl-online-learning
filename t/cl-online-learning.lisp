@@ -1084,3 +1084,54 @@
     (ok (= (dim-of learner) iris-dim))
     (ok (= (n-class-of learner) 3))
     (ok (sparse-learner? learner))))
+
+;;; Golden values
+;;;
+;;; Frozen from the implementation, so these cannot by themselves show the update
+;;; rule is right -- MULTICLASS-AROW-LEARNS-IRIS (an accuracy floor),
+;;; MULTICLASS-AROW-DENSE-SPARSE-AGREE (two independent code paths) and a hand
+;;; check against Figure 3 do that.  What these catch is drift: any later change
+;;; to the update rule, to float precision, or to iteration order.
+;;;
+;;; The hand check, for the record: on the first datum of IRIS.SCALE
+;;; (y = 0, x = #(-0.555556 0.25 -0.864407 -0.916667)) every score is 0.0, so
+;;; m = 0, the competitor is class 1, and Figure 3 with mu = 0, Sigma = I and
+;;; r = 10 gives v = 2(x.x + 1) = 5.9172406, beta = alpha = 1/(v + 10) =
+;;; 0.06282496.  Pencil and implementation both then give weight row 0 =
+;;; alpha * x = #(-0.034902785 0.015706241 -0.05430634 -0.057589572), bias 0 =
+;;; 0.062824965, sigma0 0 = 1 - beta = 0.93717504, row 1 the exact negation, and
+;;; row 2 untouched.
+;;;
+;;; The single-pass accuracy below is far lower than DENSE-MULTICLASS-OVR-AROW's
+;;; 73.333336%, and that is expected rather than a defect.  IRIS.SCALE is sorted
+;;; into 50/50/50 class blocks; a top-1 update moves only the true class's row and
+;;; its closest competitor, so after one pass the final block's class is barely
+;;; trained.  ONE-VS-REST updates all K sub-learners on every example and so does
+;;; not care about the ordering.  MULTICLASS-AROW-LEARNS-IRIS uses two epochs for
+;;; exactly this reason.
+
+(deftest dense-multiclass-arow
+  (let ((learner (make-multiclass-arow iris-dim 3 10)))
+    (train learner iris)
+    (ok (approximately-equal (svref (clol::multiclass-arow-weight learner) 0)
+                             #(-0.054501988 0.36527476 -0.248283 -0.21588896)))
+    (ok (approximately-equal (aref (clol::multiclass-arow-bias learner) 0)
+                             -0.14492117))
+    (ok (approximately-equal
+         (multiple-value-bind (accuracy n-correct n-total) (test learner iris)
+           (list accuracy n-correct n-total))
+         '(44.666664 67 150)))))
+
+(deftest sparse-multiclass-arow
+  ;; Same golden values as DENSE-MULTICLASS-AROW: the two representations differ
+  ;; only in storage, which MULTICLASS-AROW-DENSE-SPARSE-AGREE checks directly.
+  (let ((learner (make-sparse-multiclass-arow iris-dim 3 10)))
+    (train learner iris.sp)
+    (ok (approximately-equal (svref (clol::sparse-multiclass-arow-weight learner) 0)
+                             #(-0.054501988 0.36527476 -0.248283 -0.21588896)))
+    (ok (approximately-equal (aref (clol::sparse-multiclass-arow-bias learner) 0)
+                             -0.14492117))
+    (ok (approximately-equal
+         (multiple-value-bind (accuracy n-correct n-total) (test learner iris.sp)
+           (list accuracy n-correct n-total))
+         '(44.666664 67 150)))))
