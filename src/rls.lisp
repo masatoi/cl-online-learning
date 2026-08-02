@@ -74,6 +74,18 @@
   (check-type input-dimension integer)
   (assert (> input-dimension 0))
   (check-type gamma single-float)
+  ;; GAMMA is the forgetting factor.  The bound below is NOT a safety guarantee: a value
+  ;; it accepts can still destroy the model.  SIGMA is divided by GAMMA on every update,
+  ;; but the rank-1 correction that counteracts that growth only touches the coordinates
+  ;; the current input actually has -- the covariance windup of adaptive control.  A
+  ;; coordinate that is rarely active therefore inflates without bound.  On t/dataset/a1a
+  ;; (123 sparse binary features) SIGMA reaches 1.1e35 after 5 epochs at GAMMA 0.99, and
+  ;; at GAMMA 0.98 -- which this assertion permits -- the whole model is NaN by epoch 3.
+  ;; RLS-FORGETTING-FACTOR-BELOW-1-INFLATES-SIGMA records that.
+  ;;
+  ;; It is safe where every coordinate is seen often: at dimension 1, GAMMA 0.99 settles
+  ;; to a fixed point and stays there, which is what example/regression/sin.lisp relies on.
+  ;; GAMMA 1.0 -- no forgetting -- is the setting the rest of this repository uses.
   (assert (<= 0.98 gamma 1.0))
   (%make-rls :input-dimension input-dimension
              :weight (make-vec input-dimension 0.0) ; mu
@@ -141,6 +153,18 @@
   (check-type input-dimension integer)
   (assert (> input-dimension 0))
   (check-type gamma single-float)
+  ;; GAMMA is the forgetting factor.  The bound below is NOT a safety guarantee: a value
+  ;; it accepts can still destroy the model.  SIGMA is divided by GAMMA on every update,
+  ;; but the rank-1 correction that counteracts that growth only touches the coordinates
+  ;; the current input actually has -- the covariance windup of adaptive control.  A
+  ;; coordinate that is rarely active therefore inflates without bound.  On t/dataset/a1a
+  ;; (123 sparse binary features) SIGMA reaches 1.1e35 after 5 epochs at GAMMA 0.99, and
+  ;; at GAMMA 0.98 -- which this assertion permits -- the whole model is NaN by epoch 3.
+  ;; RLS-FORGETTING-FACTOR-BELOW-1-INFLATES-SIGMA records that.
+  ;;
+  ;; It is safe where every coordinate is seen often: at dimension 1, GAMMA 0.99 settles
+  ;; to a fixed point and stays there, which is what example/regression/sin.lisp relies on.
+  ;; GAMMA 1.0 -- no forgetting -- is the setting the rest of this repository uses.
   (assert (<= 0.98 gamma 1.0))
   (%make-sparse-rls :input-dimension input-dimension
                      :weight (make-vec input-dimension 0.0) ; mu

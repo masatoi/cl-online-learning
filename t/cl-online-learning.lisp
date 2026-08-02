@@ -1851,3 +1851,50 @@ since neither satisfies <= against a finite bound."
       (ok (loop for i from 0 below a1a-dim
                 always (or (member i touched)
                            (zerop (aref (clol::sparse-scw-weight learner) i))))))))
+
+;;;; ------------------------------------------------------------------------
+;;;; RLS and the forgetting factor
+;;;;
+;;;; The RLS update itself is correct -- at GAMMA 1.0 it agrees with a from-scratch
+;;;; double-float implementation of the standard recursion to 3e-7 on a1a.  What these
+;;;; two tests record is the boundary of where it is usable, which MAKE-RLS's
+;;;; (assert (<= 0.98 gamma 1.0)) does not describe.
+;;;;
+;;;; SIGMA is divided by GAMMA on every update, while the rank-1 correction that
+;;;; counteracts that growth only touches the coordinates the current input has.  On
+;;;; sparse data a rarely-active coordinate therefore inflates without bound -- the
+;;;; covariance windup of adaptive control.  It is a property of RLS with forgetting,
+;;;; not a defect in this transcription of it, and it does not appear where every
+;;;; coordinate is seen often: at dimension 1, GAMMA 0.99 settles to a fixed point.
+
+(deftest rls-forgetting-factor-1-is-stable
+  ;; The supported configuration, and the one every other RLS test here uses.  With no
+  ;; forgetting SIGMA only ever shrinks, so it stays inside (0, 1] and the model stays
+  ;; finite however long training runs.
+  (let ((learner (make-rls a1a-dim 1.0)))
+    (dotimes (i 5) (train learner a1a))
+    (let ((sigma (clol::rls-sigma learner)))
+      (ok (every (lambda (s) (and (< 0.0 s) (<= s 1.0))) sigma))
+      (ok (< 0.0 (clol::rls-sigma0 learner) 1.0))
+      (ok (< (test learner a1a :quiet-p t) 1.0)))))
+
+(deftest rls-forgetting-factor-below-1-inflates-sigma
+  ;; CHARACTERIZATION, not a desired behaviour.  This records that GAMMA values MAKE-RLS
+  ;; accepts can inflate SIGMA past what single-float can hold, and that 0.98 -- the
+  ;; documented lower bound -- loses the model outright on this dataset.
+  ;;
+  ;; If covariance windup is ever addressed (clipping SIGMA, directional forgetting,
+  ;; covariance resetting), this test SHOULD fail.  Delete it then rather than adjusting
+  ;; the thresholds; its job is to make that a deliberate decision.
+  (flet ((finite-p (x) (<= (abs x) most-positive-single-float)))
+    ;; 0.99: still finite after five epochs, but grown by dozens of orders of magnitude
+    ;; from its initial 1.0 -- far past where single-float keeps meaningful precision.
+    (let ((learner (make-rls a1a-dim 0.99)))
+      (dotimes (i 5) (train learner a1a))
+      (let ((sigma (clol::rls-sigma learner)))
+        (ok (every #'finite-p sigma))
+        (ok (> (reduce #'max sigma) 1e30))))
+    ;; 0.98: the assertion in MAKE-RLS permits this, and it does not survive.
+    (let ((learner (make-rls a1a-dim 0.98)))
+      (dotimes (i 3) (train learner a1a))
+      (ok (notevery #'finite-p (clol::rls-sigma learner))))))
