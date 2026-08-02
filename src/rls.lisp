@@ -80,8 +80,10 @@
   ;; the current input actually has -- the covariance windup of adaptive control.  A
   ;; coordinate that is rarely active therefore inflates without bound.  On t/dataset/a1a
   ;; (123 sparse binary features) SIGMA reaches 1.1e35 after 5 epochs at GAMMA 0.99, and
-  ;; at GAMMA 0.98 -- which this assertion permits -- the whole model is NaN by epoch 3.
-  ;; RLS-FORGETTING-FACTOR-BELOW-1-INFLATES-SIGMA records that.
+  ;; at GAMMA 0.98 -- which this assertion permits -- the model is gone by epoch 3.  How
+  ;; it goes depends on the implementation: SBCL on x86-64 traps the overflow and signals
+  ;; FLOATING-POINT-OVERFLOW, while CCL and SBCL on ARM64 mask it and leave NaN behind.
+  ;; RLS-FORGETTING-FACTOR-BOUNDS-USABLE-RANGE records that.
   ;;
   ;; It is safe where every coordinate is seen often: at dimension 1, GAMMA 0.99 settles
   ;; to a fixed point and stays there, which is what example/regression/sin.lisp relies on.
@@ -159,8 +161,10 @@
   ;; the current input actually has -- the covariance windup of adaptive control.  A
   ;; coordinate that is rarely active therefore inflates without bound.  On t/dataset/a1a
   ;; (123 sparse binary features) SIGMA reaches 1.1e35 after 5 epochs at GAMMA 0.99, and
-  ;; at GAMMA 0.98 -- which this assertion permits -- the whole model is NaN by epoch 3.
-  ;; RLS-FORGETTING-FACTOR-BELOW-1-INFLATES-SIGMA records that.
+  ;; at GAMMA 0.98 -- which this assertion permits -- the model is gone by epoch 3.  How
+  ;; it goes depends on the implementation: SBCL on x86-64 traps the overflow and signals
+  ;; FLOATING-POINT-OVERFLOW, while CCL and SBCL on ARM64 mask it and leave NaN behind.
+  ;; RLS-FORGETTING-FACTOR-BOUNDS-USABLE-RANGE records that.
   ;;
   ;; It is safe where every coordinate is seen often: at dimension 1, GAMMA 0.99 settles
   ;; to a fixed point and stays there, which is what example/regression/sin.lisp relies on.
