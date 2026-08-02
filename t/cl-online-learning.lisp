@@ -1740,3 +1740,48 @@ since neither satisfies <= against a finite bound."
          (multiple-value-bind (accuracy n-correct n-total) (test learner iris.sp)
            (list accuracy n-correct n-total))
          '(85.333336 128 150)))))
+
+;;; Serialization
+;;;
+;;; Neither softmax+FTRL struct caches a function object, so SAVE's TYPECASE falls through
+;;; and CL-STORE handles them directly -- no *-CLEAR-FUNCTIONS-FOR-STORE pair was added.
+;;; Z and N are the real model state and WEIGHT is derived from them, so a round trip that
+;;; restored WEIGHT but dropped Z and N would look correct until the next update -- which
+;;; is why these assert on Z and N and then train the restored learner.
+
+(deftest save-restore-softmax+ftrl
+  (let ((learner (make-softmax+ftrl iris-dim 3 0.1 1.0 1.0 1.0)))
+    (train learner iris)
+    (let ((restored (round-trip learner)))
+      (ok (eq (type-of restored) 'clol::softmax+ftrl))
+      (ok (equalp (clol::softmax+ftrl-weight learner)
+                  (clol::softmax+ftrl-weight restored)))
+      (ok (equalp (clol::softmax+ftrl-z learner) (clol::softmax+ftrl-z restored)))
+      (ok (equalp (clol::softmax+ftrl-n learner) (clol::softmax+ftrl-n restored)))
+      (ok (equalp (clol::softmax+ftrl-bias learner) (clol::softmax+ftrl-bias restored)))
+      (ok (= (clol::softmax+ftrl-n-class learner) (clol::softmax+ftrl-n-class restored)))
+      (ok (equal (multiple-value-list (test learner iris :quiet-p t))
+                 (multiple-value-list (test restored iris :quiet-p t))))
+      (ok (progn (train restored iris) t))
+      ;; The cache invariant must survive the round trip and the retrain.
+      (ok (= (softmax-ftrl-cache-mismatches restored) 0)))))
+
+(deftest save-restore-sparse-softmax+ftrl
+  (let ((learner (make-sparse-softmax+ftrl iris-dim 3 0.1 1.0 1.0 1.0)))
+    (train learner iris.sp)
+    (let ((restored (round-trip learner)))
+      (ok (eq (type-of restored) 'clol::sparse-softmax+ftrl))
+      (ok (equalp (clol::sparse-softmax+ftrl-weight learner)
+                  (clol::sparse-softmax+ftrl-weight restored)))
+      (ok (equalp (clol::sparse-softmax+ftrl-z learner)
+                  (clol::sparse-softmax+ftrl-z restored)))
+      (ok (equalp (clol::sparse-softmax+ftrl-n learner)
+                  (clol::sparse-softmax+ftrl-n restored)))
+      (ok (equalp (clol::sparse-softmax+ftrl-bias learner)
+                  (clol::sparse-softmax+ftrl-bias restored)))
+      (ok (= (clol::sparse-softmax+ftrl-n-class learner)
+             (clol::sparse-softmax+ftrl-n-class restored)))
+      (ok (equal (multiple-value-list (test learner iris.sp :quiet-p t))
+                 (multiple-value-list (test restored iris.sp :quiet-p t))))
+      (ok (progn (train restored iris.sp) t))
+      (ok (= (sparse-softmax-ftrl-cache-mismatches restored) 0)))))
