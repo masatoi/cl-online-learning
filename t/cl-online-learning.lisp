@@ -1606,3 +1606,76 @@ since neither satisfies <= against a finite bound."
   ;; ALPHA divides in every weight derivation, so 0.0 would fill the model with NaN.
   (ok (handler-case (progn (make-softmax+ftrl iris-dim 3 1d-50 1.0 1.0 1.0) nil)
         (error () t))))
+
+(defun sparse-softmax-ftrl-cache-mismatches (learner)
+  "Count (class, coordinate) pairs whose cached WEIGHT differs from a fresh derivation."
+  (let ((w (clol::sparse-softmax+ftrl-weight learner))
+        (z (clol::sparse-softmax+ftrl-z learner))
+        (n (clol::sparse-softmax+ftrl-n learner))
+        (alpha (clol::sparse-softmax+ftrl-alpha learner))
+        (beta (clol::sparse-softmax+ftrl-beta learner))
+        (lambda1 (clol::sparse-softmax+ftrl-lambda1 learner))
+        (lambda2 (clol::sparse-softmax+ftrl-lambda2 learner))
+        (mismatch 0))
+    (dotimes (k (clol::sparse-softmax+ftrl-n-class learner) mismatch)
+      (dotimes (i (length (svref w k)))
+        (unless (= (aref (svref w k) i)
+                   (clol::ftrl-weight-of (aref (svref z k) i) (aref (svref n k) i)
+                                         alpha beta lambda1 lambda2))
+          (incf mismatch))))))
+
+(defun sparse-softmax-ftrl-all-finite-p (learner)
+  "True when every weight and bias is finite.  NaN and infinity both fail the comparison."
+  (flet ((finite-p (x) (<= (abs x) most-positive-single-float)))
+    (and (every #'finite-p (clol::sparse-softmax+ftrl-bias learner))
+         (every (lambda (row) (every #'finite-p row))
+                (clol::sparse-softmax+ftrl-weight learner)))))
+
+(deftest sparse-softmax+ftrl-weight-cache-invariant
+  (let ((learner (make-sparse-softmax+ftrl iris-dim 3 0.1 1.0 1.0 1.0)))
+    (dotimes (i 5) (train learner iris.sp))
+    (ok (= (sparse-softmax-ftrl-cache-mismatches learner) 0))))
+
+(deftest sparse-softmax+ftrl-survives-extreme-scores
+  ;; The guard lives in each update body separately, so covering only the dense one would
+  ;; leave this path unprotected.
+  (let ((learner (make-sparse-softmax+ftrl iris-dim 3 0.1 1.0 1.0 1.0))
+        (datum (first iris.sp)))
+    (setf (aref (clol::sparse-softmax+ftrl-z0 learner) 0) -1e30
+          (aref (clol::sparse-softmax+ftrl-bias learner) 0)
+          (clol::ftrl-weight-of -1e30 0.0 0.1 1.0 0.0 1.0))
+    (ok (handler-case
+            (progn (clol::sparse-softmax+ftrl-update learner (cdr datum) (car datum))
+                   (sparse-softmax-ftrl-all-finite-p learner))
+          (error () nil)))))
+
+(deftest softmax+ftrl-dense-sparse-agree
+  ;; Identical arithmetic, different traversal: the dense loop visits every dimension,
+  ;; the sparse one only the non-zeros.  On a zero coordinate the dense update is a
+  ;; no-op -- g is 0, so z and n do not move and the refreshed weight recomputes to the
+  ;; same value -- so the two must agree exactly.  The code paths are independent, which
+  ;; makes this a real check on the update rule rather than a restatement of the golden
+  ;; values that follow.
+  (let ((dense (make-softmax+ftrl iris-dim 3 0.1 1.0 1.0 1.0))
+        (sparse (make-sparse-softmax+ftrl iris-dim 3 0.1 1.0 1.0 1.0)))
+    (train dense iris)
+    (train sparse iris.sp)
+    (dotimes (k 3)
+      (ok (approximately-equal (svref (clol::softmax+ftrl-weight dense) k)
+                               (svref (clol::sparse-softmax+ftrl-weight sparse) k)))
+      (ok (approximately-equal (svref (clol::softmax+ftrl-z dense) k)
+                               (svref (clol::sparse-softmax+ftrl-z sparse) k)))
+      (ok (approximately-equal (svref (clol::softmax+ftrl-n dense) k)
+                               (svref (clol::sparse-softmax+ftrl-n sparse) k))))
+    (ok (approximately-equal (clol::softmax+ftrl-bias dense)
+                             (clol::sparse-softmax+ftrl-bias sparse)))
+    (ok (approximately-equal (test dense iris :quiet-p t)
+                             (test sparse iris.sp :quiet-p t)))))
+
+(deftest metadata-of-sparse-softmax+ftrl
+  (let ((learner (make-sparse-softmax+ftrl iris-dim 3 0.1 1.0 1.0 1.0)))
+    ;; A sparse learner stores its weight rows as full-length dense vectors, so DIM-OF
+    ;; reads the same width for both representations.
+    (ok (= (dim-of learner) iris-dim))
+    (ok (= (n-class-of learner) 3))
+    (ok (sparse-learner? learner))))
