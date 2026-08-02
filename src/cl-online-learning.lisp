@@ -1819,8 +1819,10 @@ learner's weight, which is what lets the existing vector operators apply per row
     max-i))
 
 ;; training-label should be an integer class index (0 ... K-1).  The range is NOT
-;; checked: under (safety 0) an out-of-range label is an unchecked heap write, not an
-;; error.
+;; checked. Unlike MULTICLASS-AROW-UPDATE, which indexes by the label and faults on a bad one, this
+;; body only compares against it, so an out-of-range label causes no fault -- just a wrong gradient:
+;; every class is treated as incorrect, so all K rows are pushed down with no positive target.
+;; Realistic cause: raw LIBSVM labels instead of :multiclass-p t.
 (defun softmax+ftrl-update (learner input training-label)
   (declare (type softmax+ftrl learner)
            (type (simple-array single-float) input)
@@ -1977,7 +1979,10 @@ learner's weight, which is what lets the existing vector operators apply per row
                 max-i k))))
     max-i))
 
-;; training-label should be an integer class index (0 ... K-1).  The range is NOT checked.
+;; training-label should be an integer class index (0 ... K-1).  The range is NOT
+;; checked, for the same reason as SOFTMAX+FTRL-UPDATE above: this body only compares against
+;; training-label, never indexes by it, so an out-of-range value causes no fault, only a silently
+;; wrong gradient (all K rows pushed down).
 (defun sparse-softmax+ftrl-update (learner input training-label)
   (declare (type sparse-softmax+ftrl learner)
            (type sparse-vector input)
