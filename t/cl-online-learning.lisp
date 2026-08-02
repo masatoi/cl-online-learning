@@ -1864,9 +1864,15 @@ since neither satisfies <= against a finite bound."
 ;;;; counteracts that growth only touches the coordinates the current input has.  On
 ;;;; sparse data a rarely-active coordinate therefore inflates without bound -- the
 ;;;; covariance windup of adaptive control.  It is a property of RLS with forgetting,
-;;;; not a defect in this transcription of it, and it does not appear where every
-;;;; coordinate is seen often: at dimension 1, GAMMA 0.99 settles to a fixed point,
-;;;; which is what example/regression/sin.lisp relies on.
+;;;; not a defect in this transcription of it.
+;;;;
+;;;; What decides it is how much excitation a coordinate receives, not how often it is
+;;;; nominally present.  A single coordinate settles at roughly GAMMA(1-GAMMA)/x^2, so it
+;;;; survives only while that is representable: at GAMMA 0.99, x = 1 settles at 1.0e-2 and
+;;;; x = 1e-10 at 1.0e18, but x = 1e-21 would need 9.9e39 and runs away despite being
+;;;; present on every update.  example/regression/sin.lisp is fine because its inputs are
+;;;; order 1; a1a's binary features fail from the other side, being absent most of the
+;;;; time and so never corrected.
 ;;;;
 ;;;; Measured on a1a: SIGMA's maximum runs 1.0 at GAMMA 1.0, 3.1e3 at 0.999 and 1.1e35
 ;;;; at 0.99 after five epochs, and at 0.98 the model is gone by epoch 3.

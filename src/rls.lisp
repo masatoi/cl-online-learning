@@ -85,8 +85,16 @@
   ;; FLOATING-POINT-OVERFLOW, while CCL and SBCL on ARM64 mask it and leave NaN behind.
   ;; RLS-FORGETTING-FACTOR-BOUNDS-USABLE-RANGE records that.
   ;;
-  ;; It is safe where every coordinate is seen often: at dimension 1, GAMMA 0.99 settles
-  ;; to a fixed point and stays there, which is what example/regression/sin.lisp relies on.
+  ;; What decides this is how much excitation each coordinate receives, NOT how often it
+  ;; is nominally present.  For a single coordinate the recursion settles at roughly
+  ;; GAMMA(1-GAMMA)/x^2, so it is usable only while that stays representable: at GAMMA
+  ;; 0.99 a coordinate with x = 1 settles at 1.0e-2 and one with x = 1e-10 at 1.0e18, but
+  ;; x = 1e-21 would need 9.9e39 -- past most-positive-single-float -- and so runs away
+  ;; even though it is present on every single update.  a1a's binary features fail the
+  ;; same test from the other direction: they are absent most of the time, so they receive
+  ;; no correction at all.
+  ;;
+  ;; example/regression/sin.lisp is fine because its inputs are order 1.
   ;; GAMMA 1.0 -- no forgetting -- is the setting the rest of this repository uses.
   (assert (<= 0.98 gamma 1.0))
   (%make-rls :input-dimension input-dimension
@@ -166,8 +174,16 @@
   ;; FLOATING-POINT-OVERFLOW, while CCL and SBCL on ARM64 mask it and leave NaN behind.
   ;; RLS-FORGETTING-FACTOR-BOUNDS-USABLE-RANGE records that.
   ;;
-  ;; It is safe where every coordinate is seen often: at dimension 1, GAMMA 0.99 settles
-  ;; to a fixed point and stays there, which is what example/regression/sin.lisp relies on.
+  ;; What decides this is how much excitation each coordinate receives, NOT how often it
+  ;; is nominally present.  For a single coordinate the recursion settles at roughly
+  ;; GAMMA(1-GAMMA)/x^2, so it is usable only while that stays representable: at GAMMA
+  ;; 0.99 a coordinate with x = 1 settles at 1.0e-2 and one with x = 1e-10 at 1.0e18, but
+  ;; x = 1e-21 would need 9.9e39 -- past most-positive-single-float -- and so runs away
+  ;; even though it is present on every single update.  a1a's binary features fail the
+  ;; same test from the other direction: they are absent most of the time, so they receive
+  ;; no correction at all.
+  ;;
+  ;; example/regression/sin.lisp is fine because its inputs are order 1.
   ;; GAMMA 1.0 -- no forgetting -- is the setting the rest of this repository uses.
   (assert (<= 0.98 gamma 1.0))
   (%make-sparse-rls :input-dimension input-dimension
