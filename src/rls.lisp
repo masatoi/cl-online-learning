@@ -74,6 +74,28 @@
   (check-type input-dimension integer)
   (assert (> input-dimension 0))
   (check-type gamma single-float)
+  ;; GAMMA is the forgetting factor.  The bound below is NOT a safety guarantee: a value
+  ;; it accepts can still destroy the model.  SIGMA is divided by GAMMA on every update,
+  ;; but the rank-1 correction that counteracts that growth only touches the coordinates
+  ;; the current input actually has -- the covariance windup of adaptive control.  A
+  ;; coordinate that is rarely active therefore inflates without bound.  On t/dataset/a1a
+  ;; (123 sparse binary features) SIGMA reaches 1.1e35 after 5 epochs at GAMMA 0.99, and
+  ;; at GAMMA 0.98 -- which this assertion permits -- the model is gone by epoch 3.  How
+  ;; it goes depends on the implementation: SBCL on x86-64 traps the overflow and signals
+  ;; FLOATING-POINT-OVERFLOW, while CCL and SBCL on ARM64 mask it and leave NaN behind.
+  ;; RLS-FORGETTING-FACTOR-BOUNDS-USABLE-RANGE records that.
+  ;;
+  ;; What decides this is how much excitation each coordinate receives, NOT how often it
+  ;; is nominally present.  For a single coordinate the recursion settles at roughly
+  ;; GAMMA(1-GAMMA)/x^2, so it is usable only while that stays representable: at GAMMA
+  ;; 0.99 a coordinate with x = 1 settles at 1.0e-2 and one with x = 1e-10 at 1.0e18, but
+  ;; x = 1e-21 would need 9.9e39 -- past most-positive-single-float -- and so runs away
+  ;; even though it is present on every single update.  a1a's binary features fail the
+  ;; same test from the other direction: they are absent most of the time, so they receive
+  ;; no correction at all.
+  ;;
+  ;; example/regression/sin.lisp is fine because its inputs are order 1.
+  ;; GAMMA 1.0 -- no forgetting -- is the setting the rest of this repository uses.
   (assert (<= 0.98 gamma 1.0))
   (%make-rls :input-dimension input-dimension
              :weight (make-vec input-dimension 0.0) ; mu
@@ -141,6 +163,28 @@
   (check-type input-dimension integer)
   (assert (> input-dimension 0))
   (check-type gamma single-float)
+  ;; GAMMA is the forgetting factor.  The bound below is NOT a safety guarantee: a value
+  ;; it accepts can still destroy the model.  SIGMA is divided by GAMMA on every update,
+  ;; but the rank-1 correction that counteracts that growth only touches the coordinates
+  ;; the current input actually has -- the covariance windup of adaptive control.  A
+  ;; coordinate that is rarely active therefore inflates without bound.  On t/dataset/a1a
+  ;; (123 sparse binary features) SIGMA reaches 1.1e35 after 5 epochs at GAMMA 0.99, and
+  ;; at GAMMA 0.98 -- which this assertion permits -- the model is gone by epoch 3.  How
+  ;; it goes depends on the implementation: SBCL on x86-64 traps the overflow and signals
+  ;; FLOATING-POINT-OVERFLOW, while CCL and SBCL on ARM64 mask it and leave NaN behind.
+  ;; RLS-FORGETTING-FACTOR-BOUNDS-USABLE-RANGE records that.
+  ;;
+  ;; What decides this is how much excitation each coordinate receives, NOT how often it
+  ;; is nominally present.  For a single coordinate the recursion settles at roughly
+  ;; GAMMA(1-GAMMA)/x^2, so it is usable only while that stays representable: at GAMMA
+  ;; 0.99 a coordinate with x = 1 settles at 1.0e-2 and one with x = 1e-10 at 1.0e18, but
+  ;; x = 1e-21 would need 9.9e39 -- past most-positive-single-float -- and so runs away
+  ;; even though it is present on every single update.  a1a's binary features fail the
+  ;; same test from the other direction: they are absent most of the time, so they receive
+  ;; no correction at all.
+  ;;
+  ;; example/regression/sin.lisp is fine because its inputs are order 1.
+  ;; GAMMA 1.0 -- no forgetting -- is the setting the rest of this repository uses.
   (assert (<= 0.98 gamma 1.0))
   (%make-sparse-rls :input-dimension input-dimension
                      :weight (make-vec input-dimension 0.0) ; mu

@@ -1851,3 +1851,60 @@ since neither satisfies <= against a finite bound."
       (ok (loop for i from 0 below a1a-dim
                 always (or (member i touched)
                            (zerop (aref (clol::sparse-scw-weight learner) i))))))))
+
+;;;; ------------------------------------------------------------------------
+;;;; RLS and the forgetting factor
+;;;;
+;;;; The RLS update itself is correct -- at GAMMA 1.0 it agrees with a from-scratch
+;;;; double-float implementation of the standard recursion to 3e-7 on a1a.  What this
+;;;; test records is the boundary of where it is usable, which MAKE-RLS's
+;;;; (assert (<= 0.98 gamma 1.0)) does not describe.
+;;;;
+;;;; SIGMA is divided by GAMMA on every update, while the rank-1 correction that
+;;;; counteracts that growth only touches the coordinates the current input has.  On
+;;;; sparse data a rarely-active coordinate therefore inflates without bound -- the
+;;;; covariance windup of adaptive control.  It is a property of RLS with forgetting,
+;;;; not a defect in this transcription of it.
+;;;;
+;;;; What decides it is how much excitation a coordinate receives, not how often it is
+;;;; nominally present.  A single coordinate settles at roughly GAMMA(1-GAMMA)/x^2, so it
+;;;; survives only while that is representable: at GAMMA 0.99, x = 1 settles at 1.0e-2 and
+;;;; x = 1e-10 at 1.0e18, but x = 1e-21 would need 9.9e39 and runs away despite being
+;;;; present on every update.  example/regression/sin.lisp is fine because its inputs are
+;;;; order 1; a1a's binary features fail from the other side, being absent most of the
+;;;; time and so never corrected.
+;;;;
+;;;; Measured on a1a: SIGMA's maximum runs 1.0 at GAMMA 1.0, 3.1e3 at 0.999 and 1.1e35
+;;;; at 0.99 after five epochs, and at 0.98 the model is gone by epoch 3.
+;;;;
+;;;; HOW it dies depends on the implementation, which is why the assertion below tests
+;;;; "did not survive" rather than "became NaN".  SBCL on x86-64 traps floating-point
+;;;; overflow and signals; CCL, and SBCL on ARM64, mask it and yield NaN instead.  An
+;;;; earlier version of this test asserted the NaN, passed locally on ARM64, and failed
+;;;; CI on both x86-64 runners.
+
+(deftest rls-forgetting-factor-bounds-usable-range
+  ;; CHARACTERIZATION, not a desired behaviour.  This records that GAMMA values MAKE-RLS
+  ;; accepts can destroy the model, and that 0.98 -- the documented lower bound -- does.
+  ;;
+  ;; If covariance windup is ever addressed (clipping SIGMA, directional forgetting,
+  ;; covariance resetting), the last assertion SHOULD fail.  Delete this test then rather
+  ;; than adjusting it; its job is to make that a deliberate decision.
+  (labels ((finite-p (x) (<= (abs x) most-positive-single-float))
+           (survives-p (gamma epochs)
+             (handler-case
+                 (let ((learner (make-rls a1a-dim gamma)))
+                   (dotimes (i epochs) (train learner a1a))
+                   (and (every #'finite-p (clol::rls-sigma learner))
+                        (finite-p (clol::rls-sigma0 learner))))
+               ;; The trapping half of the split described above.
+               (arithmetic-error () nil))))
+    ;; GAMMA 1.0 is the supported configuration and the one every other RLS test uses:
+    ;; with no forgetting SIGMA only ever shrinks, so it stays inside (0, 1] forever.
+    (ok (survives-p 1.0 5))
+    (let ((learner (make-rls a1a-dim 1.0)))
+      (dotimes (i 5) (train learner a1a))
+      (ok (every (lambda (s) (and (< 0.0 s) (<= s 1.0))) (clol::rls-sigma learner)))
+      (ok (< (test learner a1a :quiet-p t) 1.0)))
+    ;; GAMMA 0.98 is accepted by MAKE-RLS and does not survive this dataset.
+    (ok (not (survives-p 0.98 3)))))
