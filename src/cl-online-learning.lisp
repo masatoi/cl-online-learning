@@ -13,12 +13,15 @@
    :make-scw :scw-update :scw-train :scw-predict :scw-test
    :make-lr+sgd :lr+sgd-update :lr+sgd-train :lr+sgd-predict :lr+sgd-test
    :make-lr+adam :lr+adam-update :lr+adam-train :lr+adam-predict :lr+adam-test
+   :make-lr+ftrl :lr+ftrl-update :lr+ftrl-train :lr+ftrl-predict :lr+ftrl-test
    :make-sparse-perceptron :sparse-perceptron-update :sparse-perceptron-train
    :sparse-perceptron-predict :sparse-perceptron-test
    :make-sparse-arow :sparse-arow-update :sparse-arow-train :sparse-arow-predict :sparse-arow-test
    :make-sparse-scw :sparse-scw-update :sparse-scw-train :sparse-scw-predict :sparse-scw-test
    :make-sparse-lr+sgd :sparse-lr+sgd-update :sparse-lr+sgd-train :sparse-lr+sgd-predict :sparse-lr+sgd-test
    :make-sparse-lr+adam :sparse-lr+adam-update :sparse-lr+adam-train :sparse-lr+adam-predict :sparse-lr+adam-test
+   :make-sparse-lr+ftrl :sparse-lr+ftrl-update :sparse-lr+ftrl-train
+   :sparse-lr+ftrl-predict :sparse-lr+ftrl-test
    :make-one-vs-rest :one-vs-rest-update :one-vs-rest-train :one-vs-rest-predict :one-vs-rest-test
    :make-one-vs-one :one-vs-one-update :one-vs-one-train :one-vs-one-predict :one-vs-one-test
    :make-multiclass-arow :multiclass-arow-update :multiclass-arow-train
@@ -545,6 +548,144 @@
     (setf (lr+adam-beta1^t learner) (* beta1 beta1^t)
           (lr+adam-beta2^t learner) (* beta2 beta2^t))))
 
+;;;; FTRL-Proximal
+;;;;
+;;;; McMahan, Holt, Sculley et al., "Ad Click Prediction: a View from the Trenches",
+;;;; KDD 2013, Algorithm 1.  Logistic regression with per-coordinate adaptive learning
+;;;; rates and L1 regularization strong enough to drive weights to exactly zero -- the
+;;;; only learner here that produces a sparse model rather than merely accepting sparse
+;;;; input.
+;;;;
+;;;; Per coordinate the state is (z_i, n_i) and the weight is derived, not stored:
+;;;;
+;;;;   w_i = 0                                              if |z_i| <= lambda1
+;;;;   w_i = -(z_i - sgn(z_i) lambda1)
+;;;;         / ((beta + sqrt(n_i))/alpha + lambda2)          otherwise
+;;;;
+;;;; then, for the coordinates the example touches,
+;;;;
+;;;;   g_i     = -y (1 - sigmoid(y (w.x + b))) x_i     [this repository's +-1 labels]
+;;;;   sigma_i = (sqrt(n_i + g_i^2) - sqrt(n_i)) / alpha
+;;;;   z_i    += g_i - sigma_i w_i
+;;;;   n_i    += g_i^2
+;;;;
+;;;; DEFINE-LEARNER's generated -PREDICT reads a WEIGHT slot, so w is materialised into
+;;;; one.  That cache is exact because w_i is a pure function of (z_i, n_i), which change
+;;;; only for the coordinates an update touches -- but ONLY if it is refreshed at the END
+;;;; of the update.  See the ordering comment in LR+FTRL-UPDATE.
+;;;;
+;;;; w_i is also a function of ALPHA, BETA, LAMBDA1 and LAMBDA2 -- ordinary DEFSTRUCT
+;;;; slots with SETF accessors, not just (z_i, n_i).  Treat those four as immutable after
+;;;; construction: every coordinate's cached weight depends on all four, so changing one
+;;;; post-construction desyncs the whole cache, not just the coordinates touched since.
+
+(declaim (inline ftrl-weight-of))
+(defun ftrl-weight-of (zi ni alpha beta lambda1 lambda2)
+  "The FTRL-Proximal weight for one coordinate, derived from its (z, n) state."
+  (declare (type single-float zi alpha beta lambda1 lambda2)
+           (type (single-float 0.0) ni)
+           (optimize (speed 3) (safety 0)))
+  (if (<= (abs zi) lambda1)
+    0.0
+    (/ (- (- zi (* (if (> zi 0.0) 1.0 -1.0) lambda1)))
+       (+ (/ (+ beta (sqrt ni)) alpha) lambda2))))
+
+(defstruct (lr+ftrl (:constructor  %make-lr+ftrl)
+                    (:print-object %print-lr+ftrl))
+  input-dimension weight bias
+  ;; meta parameters
+  alpha beta lambda1 lambda2
+  ;; per-coordinate state, and the intercept's
+  z n z0 n0)
+
+(defun %print-lr+ftrl (obj stream)
+  (format stream "#S(LR+FTRL~%~T:INPUT-DIMENSION ~A~%~T:WEIGHT ~A ...~%~T:BIAS ~A~%~T:NONZERO-WEIGHTS ~A/~A)"
+          (lr+ftrl-input-dimension obj)
+          (%vec-head (lr+ftrl-weight obj))
+          (lr+ftrl-bias obj)
+          (count-if-not #'zerop (lr+ftrl-weight obj))
+          (length (lr+ftrl-weight obj))))
+
+(defun make-lr+ftrl (input-dimension alpha beta lambda1 lambda2)
+  (check-type input-dimension integer)
+  (check-type alpha number)
+  (check-type beta number)
+  (check-type lambda1 number)
+  (check-type lambda2 number)
+  (assert (> input-dimension 0))
+  (let ((alpha (coerce alpha 'single-float))
+        (beta (coerce beta 'single-float))
+        (lambda1 (coerce lambda1 'single-float))
+        (lambda2 (coerce lambda2 'single-float)))
+    ;; Assert AFTER coercion, not before.  A positive double such as 1d-50 satisfies
+    ;; (< 0.0 alpha) yet underflows to exactly 0.0 as a single-float, and ALPHA divides
+    ;; in every weight derivation -- the model would fill with NaN on the first update
+    ;; and signal nothing.
+    (assert (< 0.0 alpha))
+    (assert (<= 0.0 beta))
+    (assert (<= 0.0 lambda1))
+    (assert (<= 0.0 lambda2))
+    (%make-lr+ftrl
+     :input-dimension input-dimension
+     :weight (make-vec input-dimension 0.0)
+     :bias 0.0
+     :alpha alpha
+     :beta beta
+     :lambda1 lambda1
+     :lambda2 lambda2
+     :z (make-vec input-dimension 0.0)
+     :n (make-vec input-dimension 0.0)
+     :z0 0.0
+     :n0 0.0)))
+
+(define-learner lr+ftrl (learner input training-label)
+  (let ((weight (lr+ftrl-weight learner))
+        (z (lr+ftrl-z learner))
+        (n (lr+ftrl-n learner))
+        (alpha (lr+ftrl-alpha learner))
+        (beta (lr+ftrl-beta learner))
+        (lambda1 (lr+ftrl-lambda1 learner))
+        (lambda2 (lr+ftrl-lambda2 learner)))
+    (declare (type (simple-array single-float) weight z n)
+             (type single-float alpha beta lambda1 lambda2))
+    ;; 1. Predict with the cached weight.  It is already current: step 3 below
+    ;;    refreshes it at the END of every update.  Refreshing at the START instead
+    ;;    leaves the cache one update stale per coordinate -- measured at 89 of 123
+    ;;    coordinates wrong on a1a, with accuracy indistinguishable either way.
+    (let* ((fx (f input weight (lr+ftrl-bias learner)))
+           (sigmoid-val (sigmoid (* training-label fx)))
+           (gscale (* -1.0 training-label (- 1.0 sigmoid-val))))
+      (declare (type single-float fx gscale)
+               (type (single-float 0.0) sigmoid-val))
+      ;; 2. Accumulate z and n, then 3. refresh the cache from the new state, fused
+      ;;    into one pass.  The z update must read the w that produced the prediction
+      ;;    above, so the refresh comes after it inside the loop body too.
+      ;;    On a coordinate where INPUT is zero this is a no-op: g is 0, so z and n do
+      ;;    not move and the refreshed w recomputes to the same value.  That is what
+      ;;    makes the dense and sparse variants agree exactly.
+      (dovec weight i
+        (let* ((gi (* gscale (aref input i)))
+               (ni (aref n i))
+               (new-ni (+ ni (* gi gi))))
+          (declare (type single-float gi)
+                   (type (single-float 0.0) ni new-ni))
+          (incf (aref z i) (- gi (* (/ (- (sqrt new-ni) (sqrt ni)) alpha)
+                                    (aref weight i))))
+          (setf (aref n i) new-ni
+                (aref weight i)
+                (ftrl-weight-of (aref z i) new-ni alpha beta lambda1 lambda2))))
+      ;; The intercept is an always-1 feature and is deliberately NOT L1-regularised:
+      ;; an L1-zeroed intercept would force the boundary through the origin.
+      (let* ((n0 (lr+ftrl-n0 learner))
+             (new-n0 (+ n0 (* gscale gscale))))
+        (declare (type (single-float 0.0) n0 new-n0))
+        (incf (lr+ftrl-z0 learner)
+              (- gscale (* (/ (- (sqrt new-n0) (sqrt n0)) alpha)
+                           (lr+ftrl-bias learner))))
+        (setf (lr+ftrl-n0 learner) new-n0
+              (lr+ftrl-bias learner)
+              (ftrl-weight-of (lr+ftrl-z0 learner) new-n0 alpha beta 0.0 lambda2))))))
+
 ;;;; Sparse version learners ;;;;
 
 ;;; Sparse Perceptron
@@ -927,6 +1068,110 @@
     ;; update beta1^2 and beta2^2
     (setf (sparse-lr+adam-beta1^t learner) (* beta1 beta1^t)
           (sparse-lr+adam-beta2^t learner) (* beta2 beta2^t))))
+
+;;; Sparse FTRL-Proximal
+;;;
+;;; Identical arithmetic to LR+FTRL; only the traversal differs.  The update walks the
+;;; input's index-vector and nothing else, so it is genuinely O(nnz) -- unlike
+;;; SPARSE-LR+ADAM above, whose moment updates sweep the full dimension and are sparse
+;;; only in the gradient.  Z, N and WEIGHT are full-length dense arrays read and written
+;;; only at the active indices; untouched coordinates keep z = 0, hence w = 0, which is
+;;; their initial value.
+
+(defstruct (sparse-lr+ftrl (:constructor  %make-sparse-lr+ftrl)
+                           (:print-object %print-sparse-lr+ftrl))
+  input-dimension weight bias
+  ;; meta parameters
+  alpha beta lambda1 lambda2
+  ;; per-coordinate state, and the intercept's
+  z n z0 n0)
+
+(defun %print-sparse-lr+ftrl (obj stream)
+  (format stream "#S(SPARSE-LR+FTRL~%~T:INPUT-DIMENSION ~A~%~T:WEIGHT ~A ...~%~T:BIAS ~A~%~T:NONZERO-WEIGHTS ~A/~A)"
+          (sparse-lr+ftrl-input-dimension obj)
+          (%vec-head (sparse-lr+ftrl-weight obj))
+          (sparse-lr+ftrl-bias obj)
+          (count-if-not #'zerop (sparse-lr+ftrl-weight obj))
+          (length (sparse-lr+ftrl-weight obj))))
+
+(defun make-sparse-lr+ftrl (input-dimension alpha beta lambda1 lambda2)
+  (check-type input-dimension integer)
+  (check-type alpha number)
+  (check-type beta number)
+  (check-type lambda1 number)
+  (check-type lambda2 number)
+  (assert (> input-dimension 0))
+  (let ((alpha (coerce alpha 'single-float))
+        (beta (coerce beta 'single-float))
+        (lambda1 (coerce lambda1 'single-float))
+        (lambda2 (coerce lambda2 'single-float)))
+    ;; Assert AFTER coercion, not before.  A positive double such as 1d-50 satisfies
+    ;; (< 0.0 alpha) yet underflows to exactly 0.0 as a single-float, and ALPHA divides
+    ;; in every weight derivation -- the model would fill with NaN on the first update
+    ;; and signal nothing.
+    (assert (< 0.0 alpha))
+    (assert (<= 0.0 beta))
+    (assert (<= 0.0 lambda1))
+    (assert (<= 0.0 lambda2))
+    (%make-sparse-lr+ftrl
+     :input-dimension input-dimension
+     :weight (make-vec input-dimension 0.0)
+     :bias 0.0
+     :alpha alpha
+     :beta beta
+     :lambda1 lambda1
+     :lambda2 lambda2
+     :z (make-vec input-dimension 0.0)
+     :n (make-vec input-dimension 0.0)
+     :z0 0.0
+     :n0 0.0)))
+
+(define-learner sparse-lr+ftrl (learner input training-label)
+  (let ((weight (sparse-lr+ftrl-weight learner))
+        (z (sparse-lr+ftrl-z learner))
+        (n (sparse-lr+ftrl-n learner))
+        (alpha (sparse-lr+ftrl-alpha learner))
+        (beta (sparse-lr+ftrl-beta learner))
+        (lambda1 (sparse-lr+ftrl-lambda1 learner))
+        (lambda2 (sparse-lr+ftrl-lambda2 learner))
+        (index-vector (sparse-vector-index-vector input))
+        (value-vector (sparse-vector-value-vector input)))
+    (declare (type (simple-array single-float) weight z n value-vector)
+             (type (simple-array fixnum) index-vector)
+             (type single-float alpha beta lambda1 lambda2))
+    ;; 1. Predict with the cached weight, which step 3 keeps current.
+    (let* ((fx (sf input weight (sparse-lr+ftrl-bias learner)))
+           (sigmoid-val (sigmoid (* training-label fx)))
+           (gscale (* -1.0 training-label (- 1.0 sigmoid-val))))
+      (declare (type single-float fx gscale)
+               (type (single-float 0.0) sigmoid-val))
+      ;; 2. Accumulate z and n, then 3. refresh the cache, fused into one O(nnz) pass.
+      ;;    The z update must read the w that produced the prediction, so the refresh
+      ;;    comes after it inside the loop body.
+      (dosvec input k
+        (let* ((i (aref index-vector k))
+               (gi (* gscale (aref value-vector k)))
+               (ni (aref n i))
+               (new-ni (+ ni (* gi gi))))
+          (declare (type fixnum i)
+                   (type single-float gi)
+                   (type (single-float 0.0) ni new-ni))
+          (incf (aref z i) (- gi (* (/ (- (sqrt new-ni) (sqrt ni)) alpha)
+                                    (aref weight i))))
+          (setf (aref n i) new-ni
+                (aref weight i)
+                (ftrl-weight-of (aref z i) new-ni alpha beta lambda1 lambda2))))
+      ;; The intercept is an always-1 feature and is deliberately NOT L1-regularised.
+      (let* ((n0 (sparse-lr+ftrl-n0 learner))
+             (new-n0 (+ n0 (* gscale gscale))))
+        (declare (type (single-float 0.0) n0 new-n0))
+        (incf (sparse-lr+ftrl-z0 learner)
+              (- gscale (* (/ (- (sqrt new-n0) (sqrt n0)) alpha)
+                           (sparse-lr+ftrl-bias learner))))
+        (setf (sparse-lr+ftrl-n0 learner) new-n0
+              (sparse-lr+ftrl-bias learner)
+              (ftrl-weight-of (sparse-lr+ftrl-z0 learner) new-n0
+                              alpha beta 0.0 lambda2))))))
 
 ;;;; Multiclass classifiers ;;;;
 

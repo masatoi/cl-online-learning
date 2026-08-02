@@ -1220,3 +1220,281 @@
               (ok (= (length lines) (length iris)))
               (ok (null (set-difference (remove-duplicates lines :test #'string=)
                                         '("0" "1" "2") :test #'string=)))))))))
+
+;;;; ------------------------------------------------------------------------
+;;;; FTRL-Proximal
+;;;;
+;;;; McMahan et al., "Ad Click Prediction: a View from the Trenches", KDD 2013,
+;;;; Algorithm 1.  Per coordinate the state is (z, n); the weight is a value the
+;;;; algorithm derives from that state rather than stores.  This implementation
+;;;; materialises it into the WEIGHT slot so DEFINE-LEARNER's generated -PREDICT
+;;;; can be reused, which also makes ONE-VS-REST and ONE-VS-ONE work unchanged.
+
+(deftest ftrl-weight-of-known-values
+  ;; LR+FTRL-WEIGHT-CACHE-INVARIANT and LR+FTRL-DENSE-SPARSE-AGREE both compare against
+  ;; CLOL::FTRL-WEIGHT-OF itself, so a wrong FTRL-WEIGHT-OF would satisfy both of them
+  ;; -- neither pins the function against a value derived independently of the code.
+  ;; This test does: each expected value below is worked out by hand from Algorithm 1's
+  ;; formula, w = 0 if |z| <= lambda1, else -(z - sgn(z) lambda1) / ((beta+sqrt(n))/alpha
+  ;; + lambda2), never by calling FTRL-WEIGHT-OF.
+  ;;
+  ;; Case 1: z=0.5, n=0.25, alpha=0.1, beta=1.0, lambda1=0.0, lambda2=1.0.
+  ;;   |z| > lambda1, so the general branch applies. sqrt(n) = 0.5, so the denominator
+  ;;   is (1.0 + 0.5)/0.1 + 1.0 = 15.0 + 1.0 = 16.0, and the numerator -(0.5 - 0) = -0.5.
+  ;;   w = -0.5 / 16.0 = -0.03125.
+  (ok (approximately-equal (clol::ftrl-weight-of 0.5 0.25 0.1 1.0 0.0 1.0) -0.03125))
+  ;; Case 2: same z, n, alpha, beta as case 1, but lambda2 = 0.0, dropping the "+ 1.0"
+  ;;   from the denominator: (1.0 + 0.5)/0.1 + 0.0 = 15.0.
+  ;;   w = -0.5 / 15.0 = -0.033333...
+  (ok (approximately-equal (clol::ftrl-weight-of 0.5 0.25 0.1 1.0 0.0 0.0) -0.033333333))
+  ;; Case 3: z = -0.5 instead of 0.5, everything else as case 1. lambda1 is 0.0, so
+  ;;   sgn(z) never enters the numerator; only z's own sign does: -(-0.5 - 0) = 0.5.
+  ;;   Denominator is unchanged at 16.0, so w = 0.5 / 16.0 = 0.03125 -- exactly case 1
+  ;;   with the sign flipped.
+  (ok (approximately-equal (clol::ftrl-weight-of -0.5 0.25 0.1 1.0 0.0 1.0) 0.03125))
+  ;; Case 4: z=0.5, lambda1=1.0, so |z| <= lambda1 and the L1 branch fires: w must be
+  ;;   EXACTLY 0.0, not merely close to it -- that exactness is the point of L1 here, so
+  ;;   this one case uses = rather than APPROXIMATELY-EQUAL.
+  (ok (= (clol::ftrl-weight-of 0.5 0.25 0.1 1.0 1.0 1.0) 0.0)))
+
+(defun ftrl-cache-mismatches (learner)
+  "Count coordinates where LEARNER's cached WEIGHT differs from a freshly derived w."
+  (let ((w (clol::lr+ftrl-weight learner))
+        (z (clol::lr+ftrl-z learner))
+        (n (clol::lr+ftrl-n learner))
+        (mismatch 0))
+    (dotimes (i (length w) mismatch)
+      (unless (= (aref w i)
+                 (clol::ftrl-weight-of (aref z i) (aref n i)
+                                       (clol::lr+ftrl-alpha learner)
+                                       (clol::lr+ftrl-beta learner)
+                                       (clol::lr+ftrl-lambda1 learner)
+                                       (clol::lr+ftrl-lambda2 learner)))
+        (incf mismatch)))))
+
+(deftest lr+ftrl-weight-cache-invariant
+  ;; THE test for this learner.  WEIGHT caches a value the algorithm derives from
+  ;; (z, n), and it is only correct if the update refreshes it AFTER updating z and n.
+  ;; Refreshing first still trains and still reaches the same accuracy to two decimal
+  ;; places, so no accuracy assertion can catch the bug.  Measured with the wrong
+  ;; ordering on this data: 89 of 123 coordinates stale.
+  (let ((learner (make-lr+ftrl a1a-dim 0.1 1.0 2.0 1.0)))
+    (dotimes (i 5) (train learner a1a))
+    (ok (= (ftrl-cache-mismatches learner) 0))))
+
+(deftest lr+ftrl-learns-a1a
+  (let ((learner (make-lr+ftrl a1a-dim 0.1 1.0 1.0 1.0)))
+    (dotimes (i 10) (train learner a1a))
+    ;; a1a is 1210 negative to 395 positive, so always answering -1 scores 75.39%.
+    ;; SPARSE-AROW reaches 86.04% and SPARSE-LR+ADAM 85.30% over the same ten passes;
+    ;; FTRL measured 84.80%.  80% is the floor: above the trivial baseline, well below
+    ;; what a working implementation reaches.
+    (ok (> (test learner a1a :quiet-p t) 80.0))))
+
+(deftest lr+ftrl-l1-sparsity
+  ;; Exact zeros are what FTRL-Proximal offers and no other learner here produces.
+  ;; Measured over ten passes: 113 non-zero at lambda1 0.0, 106 at 0.5, 98 at 2.0,
+  ;; 70 at 10.0.  Asserting monotonicity rather than those four integers keeps this a
+  ;; statement about the algorithm instead of another golden value.
+  (let ((counts
+          (mapcar (lambda (lambda1)
+                    (let ((learner (make-lr+ftrl a1a-dim 0.1 1.0 lambda1 1.0)))
+                      (dotimes (i 10) (train learner a1a))
+                      (count-if-not #'zerop (clol::lr+ftrl-weight learner))))
+                  '(0.0 0.5 2.0 10.0))))
+    (ok (apply #'>= counts))
+    (ok (< (fourth counts) (first counts)))))
+
+(deftest metadata-of-lr+ftrl
+  ;; No branch was added to DIM-OF, N-CLASS-OF or SPARSE-LEARNER? for this learner.
+  ;; These assertions are what confirm none was needed.
+  (let ((learner (make-lr+ftrl a1a-dim 0.1 1.0 1.0 1.0)))
+    (ok (= (dim-of learner) a1a-dim))
+    (ok (= (n-class-of learner) 2))
+    (ok (null (sparse-learner? learner)))))
+
+(deftest lr+ftrl-rejects-bad-parameters
+  ;; ALPHA is a divisor in every weight derivation.  ASSERT establishes a CONTINUE
+  ;; restart, so these use HANDLER-CASE rather than ROVE's SIGNALS, which does not
+  ;; reliably catch conditions raised under a restart.
+  (ok (handler-case (progn (make-lr+ftrl a1a-dim 0.0 1.0 1.0 1.0) nil)
+        (error () t)))
+  (ok (handler-case (progn (make-lr+ftrl a1a-dim -0.1 1.0 1.0 1.0) nil)
+        (error () t)))
+  (ok (handler-case (progn (make-lr+ftrl a1a-dim 0.1 1.0 -1.0 1.0) nil)
+        (error () t)))
+  (ok (handler-case (progn (make-lr+ftrl a1a-dim 0.1 -1.0 1.0 1.0) nil)
+        (error () t)))
+  (ok (handler-case (progn (make-lr+ftrl a1a-dim 0.1 1.0 1.0 -1.0) nil)
+        (error () t))))
+
+(defun sparse-ftrl-cache-mismatches (learner)
+  "Count coordinates where LEARNER's cached WEIGHT differs from a freshly derived w."
+  (let ((w (clol::sparse-lr+ftrl-weight learner))
+        (z (clol::sparse-lr+ftrl-z learner))
+        (n (clol::sparse-lr+ftrl-n learner))
+        (mismatch 0))
+    (dotimes (i (length w) mismatch)
+      (unless (= (aref w i)
+                 (clol::ftrl-weight-of (aref z i) (aref n i)
+                                       (clol::sparse-lr+ftrl-alpha learner)
+                                       (clol::sparse-lr+ftrl-beta learner)
+                                       (clol::sparse-lr+ftrl-lambda1 learner)
+                                       (clol::sparse-lr+ftrl-lambda2 learner)))
+        (incf mismatch)))))
+
+(deftest sparse-lr+ftrl-weight-cache-invariant
+  (let ((learner (make-sparse-lr+ftrl a1a-dim 0.1 1.0 2.0 1.0)))
+    (dotimes (i 5) (train learner a1a.sp))
+    (ok (= (sparse-ftrl-cache-mismatches learner) 0))))
+
+(deftest lr+ftrl-dense-sparse-agree
+  ;; Identical arithmetic, different traversal: the dense loop visits every dimension,
+  ;; the sparse one only the non-zeros.  On a zero coordinate the dense update is a
+  ;; no-op -- g is 0, so z and n do not move and the refreshed w recomputes to the same
+  ;; value -- so the two must agree exactly.  The code paths are independent, which
+  ;; makes this a real check on the update rule rather than a restatement of the
+  ;; golden values that follow.
+  (let ((dense (make-lr+ftrl a1a-dim 0.1 1.0 1.0 1.0))
+        (sparse (make-sparse-lr+ftrl a1a-dim 0.1 1.0 1.0 1.0)))
+    (train dense a1a)
+    (train sparse a1a.sp)
+    (ok (approximately-equal (clol::lr+ftrl-weight dense)
+                             (clol::sparse-lr+ftrl-weight sparse)))
+    (ok (approximately-equal (clol::lr+ftrl-z dense)
+                             (clol::sparse-lr+ftrl-z sparse)))
+    (ok (approximately-equal (clol::lr+ftrl-n dense)
+                             (clol::sparse-lr+ftrl-n sparse)))
+    (ok (approximately-equal (clol::lr+ftrl-bias dense)
+                             (clol::sparse-lr+ftrl-bias sparse)))
+    (ok (approximately-equal (test dense a1a :quiet-p t)
+                             (test sparse a1a.sp :quiet-p t)))))
+
+(deftest sparse-lr+ftrl-learns-a1a
+  (let ((learner (make-sparse-lr+ftrl a1a-dim 0.1 1.0 1.0 1.0)))
+    (dotimes (i 10) (train learner a1a.sp))
+    (ok (> (test learner a1a.sp :quiet-p t) 80.0))))
+
+(deftest metadata-of-sparse-lr+ftrl
+  (let ((learner (make-sparse-lr+ftrl a1a-dim 0.1 1.0 1.0 1.0)))
+    ;; A sparse learner stores its weight as a full-length dense vector, so DIM-OF
+    ;; reads the same width for both representations.
+    (ok (= (dim-of learner) a1a-dim))
+    (ok (= (n-class-of learner) 2))
+    (ok (sparse-learner? learner))))
+
+;;; Golden values
+;;;
+;;; Frozen from the implementation, so these cannot themselves show the update rule is
+;;; right -- LR+FTRL-LEARNS-A1A (an accuracy floor), LR+FTRL-WEIGHT-CACHE-INVARIANT,
+;;; LR+FTRL-DENSE-SPARSE-AGREE (two independent code paths) and a hand check against
+;;; Algorithm 1 do that.  What these catch is drift: any later change to the update
+;;; rule, to float precision, or to iteration order.
+;;;
+;;; A single pass, matching every other golden-value test here.  Only the first eight
+;;; weights are pinned; the cache invariant already covers the whole vector.
+
+(deftest dense-lr+ftrl
+  (let ((learner (make-lr+ftrl a1a-dim 0.1 1.0 1.0 1.0)))
+    (train learner a1a)
+    (ok (approximately-equal (subseq (clol::lr+ftrl-weight learner) 0 8)
+                             #(-0.7377003 -0.34051764 0.012638128 0.29802862 0.13804677
+                               -0.15894848 -0.055718463 0.09639014)))
+    (ok (approximately-equal (clol::lr+ftrl-bias learner) -0.2614437))
+    (ok (approximately-equal
+         (multiple-value-bind (accuracy n-correct n-total) (test learner a1a)
+           (list accuracy n-correct n-total))
+         '(82.928345 1331 1605)))))
+
+(deftest sparse-lr+ftrl
+  ;; Same golden values as DENSE-LR+FTRL: the two representations differ only in
+  ;; traversal, which LR+FTRL-DENSE-SPARSE-AGREE checks directly.
+  (let ((learner (make-sparse-lr+ftrl a1a-dim 0.1 1.0 1.0 1.0)))
+    (train learner a1a.sp)
+    (ok (approximately-equal (subseq (clol::sparse-lr+ftrl-weight learner) 0 8)
+                             #(-0.7377003 -0.34051764 0.012638128 0.29802862 0.13804677
+                               -0.15894848 -0.055718463 0.09639014)))
+    (ok (approximately-equal (clol::sparse-lr+ftrl-bias learner) -0.2614437))
+    (ok (approximately-equal
+         (multiple-value-bind (accuracy n-correct n-total) (test learner a1a.sp)
+           (list accuracy n-correct n-total))
+         '(82.928345 1331 1605)))))
+
+;;; Serialization
+;;;
+;;; Neither FTRL struct caches a function object, so SAVE's TYPECASE falls through and
+;;; CL-STORE handles them directly -- no *-CLEAR-FUNCTIONS-FOR-STORE pair was added.
+;;; These tests are what make that a checked claim, and they train the restored learner
+;;; because "restores but cannot train" is the failure mode worth guarding.
+
+(deftest save-restore-lr+ftrl
+  (let ((learner (make-lr+ftrl a1a-dim 0.1 1.0 1.0 1.0)))
+    (train learner a1a)
+    (let ((restored (round-trip learner)))
+      (ok (eq (type-of restored) 'clol::lr+ftrl))
+      (ok (equalp (clol::lr+ftrl-weight learner) (clol::lr+ftrl-weight restored)))
+      ;; Z and N are the actual model state -- WEIGHT is derived from them, so a round
+      ;; trip that dropped them would still look fine until the next update.
+      (ok (equalp (clol::lr+ftrl-z learner) (clol::lr+ftrl-z restored)))
+      (ok (equalp (clol::lr+ftrl-n learner) (clol::lr+ftrl-n restored)))
+      (ok (= (clol::lr+ftrl-bias learner) (clol::lr+ftrl-bias restored)))
+      (ok (equal (multiple-value-list (test learner a1a :quiet-p t))
+                 (multiple-value-list (test restored a1a :quiet-p t))))
+      (ok (progn (train restored a1a) t))
+      ;; And the cache invariant must survive the round trip and the retrain.
+      (ok (= (ftrl-cache-mismatches restored) 0)))))
+
+(deftest save-restore-sparse-lr+ftrl
+  (let ((learner (make-sparse-lr+ftrl a1a-dim 0.1 1.0 1.0 1.0)))
+    (train learner a1a.sp)
+    (let ((restored (round-trip learner)))
+      (ok (eq (type-of restored) 'clol::sparse-lr+ftrl))
+      (ok (equalp (clol::sparse-lr+ftrl-weight learner)
+                  (clol::sparse-lr+ftrl-weight restored)))
+      (ok (equalp (clol::sparse-lr+ftrl-z learner) (clol::sparse-lr+ftrl-z restored)))
+      (ok (equalp (clol::sparse-lr+ftrl-n learner) (clol::sparse-lr+ftrl-n restored)))
+      (ok (= (clol::sparse-lr+ftrl-bias learner) (clol::sparse-lr+ftrl-bias restored)))
+      (ok (equal (multiple-value-list (test learner a1a.sp :quiet-p t))
+                 (multiple-value-list (test restored a1a.sp :quiet-p t))))
+      (ok (progn (train restored a1a.sp) t))
+      (ok (= (sparse-ftrl-cache-mismatches restored) 0)))))
+
+;;; The multiclass wrappers
+;;;
+;;; No wrapper code was changed for FTRL.  MAKE-ONE-VS-REST resolves MAKE-<TYPE>,
+;;; <TYPE>-WEIGHT, <TYPE>-BIAS, <TYPE>-UPDATE and <TYPE>-PREDICT by interning names at
+;;; runtime, so a naming or slot mistake surfaces here and nowhere else.
+
+(deftest multiclass-ovr-sparse-lr+ftrl
+  ;; lambda1 is 0.0, not because a non-zero value would zero the model -- it does not:
+  ;; measured over ten passes on iris.scale, non-zero weight counts are 12 / 11 / 9 / 8
+  ;; and accuracy is 87.3% / 87.3% / 86.0% / 79.3% at lambda1 0.0 / 1.0 / 10.0 / 100.0,
+  ;; so the model is never zeroed.  The reason is that this test checks that the
+  ;; multiclass wrapper resolves the learner's functions by name and trains correctly;
+  ;; mixing L1 shrinkage into that would make a wrapper failure and a regularization
+  ;; effect indistinguishable.
+  ;;
+  ;; Measured accuracy after 10 epochs was 87.33%; 70% is a round number comfortably
+  ;; below that and well above the 33% chance floor on this 3-class dataset.
+  (let ((learner (make-one-vs-rest iris-dim 3 'sparse-lr+ftrl 0.1 1.0 0.0 1.0)))
+    (dotimes (i 10) (train learner iris.sp))
+    (ok (= (n-class-of learner) 3))
+    (ok (= (dim-of learner) iris-dim))
+    (ok (sparse-learner? learner))
+    (ok (> (test learner iris.sp :quiet-p t) 70))))
+
+(deftest multiclass-ovo-sparse-lr+ftrl
+  ;; Not redundant with the ONE-VS-REST test above: the two wrappers resolve different
+  ;; functions.  MAKE-ONE-VS-REST caches <TYPE>-WEIGHT and <TYPE>-BIAS and scores each
+  ;; class itself, while MAKE-ONE-VS-ONE caches <TYPE>-PREDICT and votes.  A learner
+  ;; whose -PREDICT were missing or misnamed would pass the ONE-VS-REST test and fail
+  ;; only here.
+  ;;
+  ;; Measured accuracy after 10 epochs was 90.67%; the 70% floor is the same round
+  ;; number used above, well clear of the 33% chance floor on this 3-class dataset.
+  (let ((learner (make-one-vs-one iris-dim 3 'sparse-lr+ftrl 0.1 1.0 0.0 1.0)))
+    (dotimes (i 10) (train learner iris.sp))
+    (ok (= (n-class-of learner) 3))
+    (ok (= (dim-of learner) iris-dim))
+    (ok (sparse-learner? learner))
+    (ok (> (test learner iris.sp :quiet-p t) 70))))
