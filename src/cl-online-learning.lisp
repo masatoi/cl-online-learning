@@ -370,7 +370,14 @@
           (when (> loss 0.0)
             (let ((alpha-sqrt-inner (+ (/ (* m m phi phi phi phi) 4.0) (* v phi phi zeta))))
               (declare (type (single-float 0.0) alpha-sqrt-inner))
-              (let ((alpha (min C (max 0.0 (- (sqrt alpha-sqrt-inner) (* m psi))))))
+              ;; The 1/(v zeta) factor is Proposition 1's and was missing here until
+              ;; 2026-08-02.  Without it every uncapped step is v*zeta times too large --
+              ;; about 40x on a1a's first update -- which the C cap then hides: at eta 0.9
+              ;; and C 0.1, 663 of 679 updates sat at the cap, so alpha was effectively a
+              ;; constant and SCW-I's adaptive step size did nothing.  Do not "simplify"
+              ;; it away; SCW-ALPHA-MATCHES-THE-PAPER-CLOSED-FORM pins it.
+              (let ((alpha (min C (max 0.0 (/ (- (sqrt alpha-sqrt-inner) (* m psi))
+                                              (* v zeta))))))
                 (declare (type single-float alpha))
                 (let ((u-sqrt-inner (+ (* alpha alpha v v phi phi) (* 4.0 v))))
                   (declare (type (single-float 0.0) u-sqrt-inner))
@@ -882,7 +889,14 @@
           (when (> loss 0.0)
             (let ((alpha-sqrt-inner (+ (/ (* m m phi phi phi phi) 4.0) (* v phi phi zeta))))
               (declare (type (single-float 0.0) alpha-sqrt-inner))
-              (let ((alpha (min C (max 0.0 (- (sqrt alpha-sqrt-inner) (* m psi))))))
+              ;; The 1/(v zeta) factor is Proposition 1's and was missing here until
+              ;; 2026-08-02.  Without it every uncapped step is v*zeta times too large --
+              ;; about 40x on a1a's first update -- which the C cap then hides: at eta 0.9
+              ;; and C 0.1, 663 of 679 updates sat at the cap, so alpha was effectively a
+              ;; constant and SCW-I's adaptive step size did nothing.  Do not "simplify"
+              ;; it away; SPARSE-SCW-ALPHA-MATCHES-THE-PAPER-CLOSED-FORM pins it.
+              (let ((alpha (min C (max 0.0 (/ (- (sqrt alpha-sqrt-inner) (* m psi))
+                                              (* v zeta))))))
                 (declare (type single-float alpha))
                 (let ((u-sqrt-inner (+ (* alpha alpha v v phi phi) (* 4.0 v))))
                   (declare (type (single-float 0.0) u-sqrt-inner))

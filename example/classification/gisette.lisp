@@ -54,6 +54,9 @@
 ;;  97.3 97.6 97.6 97.5 97.3)
 ;;   '(95.3 97.2 97.2 94.8 97.5 96.3 97.1 97.0 96.6 97.7 97.1 97.3 97.5 97.7 97.7
 ;;     97.3 96.5 97.2 97.6 97.2))
+;;  ;; The "scw" series above is STALE: it was measured before SCW-I's alpha was
+;;  ;; corrected on 2026-08-02 (the 1/(v zeta) factor of Proposition 1 was missing).
+;;  ;; Re-measure before trusting it; the gisette dataset is not in this repository.
 ;;  :title-list '("perceptron" "lr+sgd" "lr+adam" "arow" "scw")
 ;;  :x-label "epochs"
 ;;  :y-label "accuracy for gisette")
