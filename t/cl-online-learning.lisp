@@ -1498,3 +1498,290 @@
     (ok (= (dim-of learner) iris-dim))
     (ok (sparse-learner? learner))
     (ok (> (test learner iris.sp :quiet-p t) 70))))
+
+;;;; ------------------------------------------------------------------------
+;;;; Softmax regression with FTRL-Proximal
+;;;;
+;;;; The library's first learner whose class scores are coupled: ONE-VS-REST and
+;;;; ONE-VS-ONE fit independent sub-problems and MULTICLASS-AROW uses the top-1
+;;;; hinge, so nothing here previously produced a distribution over classes.
+;;;;
+;;;;   f_k   = w_k . x + b_k
+;;;;   p     = softmax(f)
+;;;;   g_k,i = (p_k - [k = y]) x_i
+;;;;
+;;;; The FTRL machinery around that gradient -- the (z, n) state, the L1
+;;;; soft-threshold and the materialised weight cache -- is LR+FTRL's, unchanged.
+
+(defun softmax-ftrl-cache-mismatches (learner)
+  "Count (class, coordinate) pairs whose cached WEIGHT differs from a fresh derivation."
+  (let ((w (clol::softmax+ftrl-weight learner))
+        (z (clol::softmax+ftrl-z learner))
+        (n (clol::softmax+ftrl-n learner))
+        (alpha (clol::softmax+ftrl-alpha learner))
+        (beta (clol::softmax+ftrl-beta learner))
+        (lambda1 (clol::softmax+ftrl-lambda1 learner))
+        (lambda2 (clol::softmax+ftrl-lambda2 learner))
+        (mismatch 0))
+    (dotimes (k (clol::softmax+ftrl-n-class learner) mismatch)
+      (dotimes (i (length (svref w k)))
+        (unless (= (aref (svref w k) i)
+                   (clol::ftrl-weight-of (aref (svref z k) i) (aref (svref n k) i)
+                                         alpha beta lambda1 lambda2))
+          (incf mismatch))))))
+
+(defun softmax-ftrl-all-finite-p (learner)
+  "True when every weight and bias is finite.  NaN and infinity both fail the comparison,
+since neither satisfies <= against a finite bound."
+  (flet ((finite-p (x) (<= (abs x) most-positive-single-float)))
+    (and (every #'finite-p (clol::softmax+ftrl-bias learner))
+         (every (lambda (row) (every #'finite-p row))
+                (clol::softmax+ftrl-weight learner)))))
+
+(deftest softmax+ftrl-weight-cache-invariant
+  ;; Carried over from LR+FTRL, now over all K x dim entries.  WEIGHT caches a value
+  ;; derived from (z, n); it is correct only if the update refreshes it AFTER updating
+  ;; z and n.  Refreshing first still trains and still reaches indistinguishable
+  ;; accuracy, so no accuracy assertion can catch the bug.
+  (let ((learner (make-softmax+ftrl iris-dim 3 0.1 1.0 1.0 1.0)))
+    (dotimes (i 5) (train learner iris))
+    (ok (= (softmax-ftrl-cache-mismatches learner) 0))))
+
+(deftest softmax+ftrl-probabilities-sum-to-one
+  ;; The defining property of a softmax, with no counterpart anywhere else in the suite.
+  ;; TMP-P holds the probabilities from the most recent update.
+  (let ((learner (make-softmax+ftrl iris-dim 3 0.1 1.0 1.0 1.0)))
+    (dotimes (i 5) (train learner iris))
+    (let ((p (clol::softmax+ftrl-tmp-p learner)))
+      (ok (approximately-equal (reduce #'+ p) 1.0))
+      (ok (every (lambda (pk) (and (<= 0.0 pk) (<= pk 1.0))) p)))))
+
+(deftest softmax+ftrl-survives-extreme-scores
+  ;; EXP overflows in single-float above roughly 88 and weights are unbounded, so the
+  ;; softmax must subtract the maximum score before exponentiating.  Ordinary data never
+  ;; reaches that range, so without this test the guard could be dropped and every other
+  ;; test would still pass.
+  ;;
+  ;; A large NEGATIVE z produces a large POSITIVE weight -- FTRL-WEIGHT-OF negates its
+  ;; numerator -- and it is a large positive score that overflows EXP.  The injection
+  ;; targets the intercept, whose feature is always 1.0, so the resulting score does not
+  ;; depend on the sign of any input coordinate.  Z0 and BIAS are set together so the
+  ;; weight-cache invariant still holds going in, and BIAS is derived with lambda1 0.0
+  ;; because the intercept is not L1-regularised.
+  (let ((learner (make-softmax+ftrl iris-dim 3 0.1 1.0 1.0 1.0))
+        (datum (first iris)))
+    (setf (aref (clol::softmax+ftrl-z0 learner) 0) -1e30
+          (aref (clol::softmax+ftrl-bias learner) 0)
+          (clol::ftrl-weight-of -1e30 0.0 0.1 1.0 0.0 1.0))
+    (ok (handler-case
+            (progn (clol::softmax+ftrl-update learner (cdr datum) (car datum))
+                   (softmax-ftrl-all-finite-p learner))
+          (error () nil)))))
+
+(deftest metadata-of-softmax+ftrl
+  (let ((learner (make-softmax+ftrl iris-dim 3 0.1 1.0 1.0 1.0)))
+    (ok (= (dim-of learner) iris-dim))
+    (ok (= (n-class-of learner) 3))
+    (ok (null (sparse-learner? learner)))))
+
+(deftest softmax+ftrl-rejects-bad-parameters
+  ;; ASSERT establishes a CONTINUE restart, so these use HANDLER-CASE rather than ROVE's
+  ;; SIGNALS, which does not reliably catch conditions raised under a restart.
+  ;;
+  ;; N-CLASS 2 is rejected because N-CLASS-OF would then return 2, putting CLOL-PREDICT
+  ;; on the binary label path and silently misreading the dataset.
+  (ok (handler-case (progn (make-softmax+ftrl iris-dim 2 0.1 1.0 1.0 1.0) nil)
+        (error () t)))
+  (ok (handler-case (progn (make-softmax+ftrl iris-dim 3 0.0 1.0 1.0 1.0) nil)
+        (error () t)))
+  (ok (handler-case (progn (make-softmax+ftrl iris-dim 3 -0.1 1.0 1.0 1.0) nil)
+        (error () t)))
+  (ok (handler-case (progn (make-softmax+ftrl iris-dim 3 0.1 -1.0 1.0 1.0) nil)
+        (error () t)))
+  (ok (handler-case (progn (make-softmax+ftrl iris-dim 3 0.1 1.0 -1.0 1.0) nil)
+        (error () t)))
+  (ok (handler-case (progn (make-softmax+ftrl iris-dim 3 0.1 1.0 1.0 -1.0) nil)
+        (error () t)))
+  ;; A positive double that underflows to 0.0 as a single-float must be rejected too:
+  ;; ALPHA divides in every weight derivation, so 0.0 would fill the model with NaN.
+  (ok (handler-case (progn (make-softmax+ftrl iris-dim 3 1d-50 1.0 1.0 1.0) nil)
+        (error () t))))
+
+(defun sparse-softmax-ftrl-cache-mismatches (learner)
+  "Count (class, coordinate) pairs whose cached WEIGHT differs from a fresh derivation."
+  (let ((w (clol::sparse-softmax+ftrl-weight learner))
+        (z (clol::sparse-softmax+ftrl-z learner))
+        (n (clol::sparse-softmax+ftrl-n learner))
+        (alpha (clol::sparse-softmax+ftrl-alpha learner))
+        (beta (clol::sparse-softmax+ftrl-beta learner))
+        (lambda1 (clol::sparse-softmax+ftrl-lambda1 learner))
+        (lambda2 (clol::sparse-softmax+ftrl-lambda2 learner))
+        (mismatch 0))
+    (dotimes (k (clol::sparse-softmax+ftrl-n-class learner) mismatch)
+      (dotimes (i (length (svref w k)))
+        (unless (= (aref (svref w k) i)
+                   (clol::ftrl-weight-of (aref (svref z k) i) (aref (svref n k) i)
+                                         alpha beta lambda1 lambda2))
+          (incf mismatch))))))
+
+(defun sparse-softmax-ftrl-all-finite-p (learner)
+  "True when every weight and bias is finite.  NaN and infinity both fail the comparison."
+  (flet ((finite-p (x) (<= (abs x) most-positive-single-float)))
+    (and (every #'finite-p (clol::sparse-softmax+ftrl-bias learner))
+         (every (lambda (row) (every #'finite-p row))
+                (clol::sparse-softmax+ftrl-weight learner)))))
+
+(deftest sparse-softmax+ftrl-weight-cache-invariant
+  (let ((learner (make-sparse-softmax+ftrl iris-dim 3 0.1 1.0 1.0 1.0)))
+    (dotimes (i 5) (train learner iris.sp))
+    (ok (= (sparse-softmax-ftrl-cache-mismatches learner) 0))))
+
+(deftest sparse-softmax+ftrl-survives-extreme-scores
+  ;; The guard lives in each update body separately, so covering only the dense one would
+  ;; leave this path unprotected.
+  (let ((learner (make-sparse-softmax+ftrl iris-dim 3 0.1 1.0 1.0 1.0))
+        (datum (first iris.sp)))
+    (setf (aref (clol::sparse-softmax+ftrl-z0 learner) 0) -1e30
+          (aref (clol::sparse-softmax+ftrl-bias learner) 0)
+          (clol::ftrl-weight-of -1e30 0.0 0.1 1.0 0.0 1.0))
+    (ok (handler-case
+            (progn (clol::sparse-softmax+ftrl-update learner (cdr datum) (car datum))
+                   (sparse-softmax-ftrl-all-finite-p learner))
+          (error () nil)))))
+
+(deftest softmax+ftrl-dense-sparse-agree
+  ;; Identical arithmetic, different traversal: the dense loop visits every dimension,
+  ;; the sparse one only the non-zeros.  On a zero coordinate the dense update is a
+  ;; no-op -- g is 0, so z and n do not move and the refreshed weight recomputes to the
+  ;; same value -- so the two must agree exactly.  The code paths are independent, which
+  ;; makes this a real check on the update rule rather than a restatement of the golden
+  ;; values that follow.
+  (let ((dense (make-softmax+ftrl iris-dim 3 0.1 1.0 1.0 1.0))
+        (sparse (make-sparse-softmax+ftrl iris-dim 3 0.1 1.0 1.0 1.0)))
+    (train dense iris)
+    (train sparse iris.sp)
+    (dotimes (k 3)
+      (ok (approximately-equal (svref (clol::softmax+ftrl-weight dense) k)
+                               (svref (clol::sparse-softmax+ftrl-weight sparse) k)))
+      (ok (approximately-equal (svref (clol::softmax+ftrl-z dense) k)
+                               (svref (clol::sparse-softmax+ftrl-z sparse) k)))
+      (ok (approximately-equal (svref (clol::softmax+ftrl-n dense) k)
+                               (svref (clol::sparse-softmax+ftrl-n sparse) k))))
+    (ok (approximately-equal (clol::softmax+ftrl-bias dense)
+                             (clol::sparse-softmax+ftrl-bias sparse)))
+    (ok (approximately-equal (test dense iris :quiet-p t)
+                             (test sparse iris.sp :quiet-p t)))))
+
+(deftest metadata-of-sparse-softmax+ftrl
+  (let ((learner (make-sparse-softmax+ftrl iris-dim 3 0.1 1.0 1.0 1.0)))
+    ;; A sparse learner stores its weight rows as full-length dense vectors, so DIM-OF
+    ;; reads the same width for both representations.
+    (ok (= (dim-of learner) iris-dim))
+    (ok (= (n-class-of learner) 3))
+    (ok (sparse-learner? learner))))
+
+(deftest softmax+ftrl-learns-iris
+  ;; Chance on this 3-class dataset is 33%.  Measured here: 91.33% over ten passes,
+  ;; against ONE-VS-REST + SPARSE-LR+FTRL's 87.33% and ONE-VS-ONE + SPARSE-LR+FTRL's
+  ;; 90.67% over the same ten passes, which are the natural comparisons for a coupled
+  ;; softmax model.  The floor sits far below the measured figure so that float drift
+  ;; cannot trip it while a genuine regression still would.
+  (let ((learner (make-softmax+ftrl iris-dim 3 0.1 1.0 1.0 1.0)))
+    (dotimes (i 10) (train learner iris))
+    (ok (> (test learner iris :quiet-p t) 70.0))))
+
+(deftest softmax+ftrl-l1-sparsity
+  ;; Exact zeros are what FTRL-Proximal offers.  iris.scale gives only 4 x 3 = 12 weights,
+  ;; so this asserts monotonic non-increase plus a strict decrease from the lowest lambda1
+  ;; to the highest, rather than pinning counts -- the same shape LR+FTRL-L1-SPARSITY uses.
+  ;; Measured over ten passes: 12 non-zero at lambda1 0.0, 11 at 1.0, 9 at 10.0, 8 at 100.0.
+  (let ((counts
+          (mapcar (lambda (lambda1)
+                    (let ((learner (make-softmax+ftrl iris-dim 3 0.1 1.0 lambda1 1.0)))
+                      (dotimes (i 10) (train learner iris))
+                      (reduce #'+ (clol::softmax+ftrl-weight learner) :initial-value 0
+                              :key (lambda (row) (count-if-not #'zerop row)))))
+                  '(0.0 1.0 10.0 100.0))))
+    (ok (apply #'>= counts))
+    (ok (< (fourth counts) (first counts)))))
+
+;;; Golden values
+;;;
+;;; Frozen from the implementation, so these cannot themselves show the update rule is
+;;; right -- SOFTMAX+FTRL-LEARNS-IRIS, SOFTMAX+FTRL-WEIGHT-CACHE-INVARIANT,
+;;; SOFTMAX+FTRL-PROBABILITIES-SUM-TO-ONE, SOFTMAX+FTRL-DENSE-SPARSE-AGREE and a hand
+;;; check of the first update do that.  What these catch is drift: any later change to
+;;; the update rule, to float precision, or to iteration order.
+;;;
+;;; A single pass, matching every other golden-value test here.
+
+(deftest dense-softmax+ftrl
+  (let ((learner (make-softmax+ftrl iris-dim 3 0.1 1.0 1.0 1.0)))
+    (train learner iris)
+    (ok (approximately-equal (svref (clol::softmax+ftrl-weight learner) 0)
+                             #(-0.30940944 0.46259928 -0.5985816 -0.5665012)))
+    (ok (approximately-equal (clol::softmax+ftrl-bias learner)
+                             #(-0.07179247 -0.021895776 -0.12316277)))
+    (ok (approximately-equal
+         (multiple-value-bind (accuracy n-correct n-total) (test learner iris)
+           (list accuracy n-correct n-total))
+         '(85.333336 128 150)))))
+
+(deftest sparse-softmax+ftrl
+  ;; Same golden values as DENSE-SOFTMAX+FTRL: the two representations differ only in
+  ;; traversal, which SOFTMAX+FTRL-DENSE-SPARSE-AGREE checks directly.
+  (let ((learner (make-sparse-softmax+ftrl iris-dim 3 0.1 1.0 1.0 1.0)))
+    (train learner iris.sp)
+    (ok (approximately-equal (svref (clol::sparse-softmax+ftrl-weight learner) 0)
+                             #(-0.30940944 0.46259928 -0.5985816 -0.5665012)))
+    (ok (approximately-equal (clol::sparse-softmax+ftrl-bias learner)
+                             #(-0.07179247 -0.021895776 -0.12316277)))
+    (ok (approximately-equal
+         (multiple-value-bind (accuracy n-correct n-total) (test learner iris.sp)
+           (list accuracy n-correct n-total))
+         '(85.333336 128 150)))))
+
+;;; Serialization
+;;;
+;;; Neither softmax+FTRL struct caches a function object, so SAVE's TYPECASE falls through
+;;; and CL-STORE handles them directly -- no *-CLEAR-FUNCTIONS-FOR-STORE pair was added.
+;;; Z and N are the real model state and WEIGHT is derived from them, so a round trip that
+;;; restored WEIGHT but dropped Z and N would look correct until the next update -- which
+;;; is why these assert on Z and N and then train the restored learner.
+
+(deftest save-restore-softmax+ftrl
+  (let ((learner (make-softmax+ftrl iris-dim 3 0.1 1.0 1.0 1.0)))
+    (train learner iris)
+    (let ((restored (round-trip learner)))
+      (ok (eq (type-of restored) 'clol::softmax+ftrl))
+      (ok (equalp (clol::softmax+ftrl-weight learner)
+                  (clol::softmax+ftrl-weight restored)))
+      (ok (equalp (clol::softmax+ftrl-z learner) (clol::softmax+ftrl-z restored)))
+      (ok (equalp (clol::softmax+ftrl-n learner) (clol::softmax+ftrl-n restored)))
+      (ok (equalp (clol::softmax+ftrl-bias learner) (clol::softmax+ftrl-bias restored)))
+      (ok (= (clol::softmax+ftrl-n-class learner) (clol::softmax+ftrl-n-class restored)))
+      (ok (equal (multiple-value-list (test learner iris :quiet-p t))
+                 (multiple-value-list (test restored iris :quiet-p t))))
+      (ok (progn (train restored iris) t))
+      ;; The cache invariant must survive the round trip and the retrain.
+      (ok (= (softmax-ftrl-cache-mismatches restored) 0)))))
+
+(deftest save-restore-sparse-softmax+ftrl
+  (let ((learner (make-sparse-softmax+ftrl iris-dim 3 0.1 1.0 1.0 1.0)))
+    (train learner iris.sp)
+    (let ((restored (round-trip learner)))
+      (ok (eq (type-of restored) 'clol::sparse-softmax+ftrl))
+      (ok (equalp (clol::sparse-softmax+ftrl-weight learner)
+                  (clol::sparse-softmax+ftrl-weight restored)))
+      (ok (equalp (clol::sparse-softmax+ftrl-z learner)
+                  (clol::sparse-softmax+ftrl-z restored)))
+      (ok (equalp (clol::sparse-softmax+ftrl-n learner)
+                  (clol::sparse-softmax+ftrl-n restored)))
+      (ok (equalp (clol::sparse-softmax+ftrl-bias learner)
+                  (clol::sparse-softmax+ftrl-bias restored)))
+      (ok (= (clol::sparse-softmax+ftrl-n-class learner)
+             (clol::sparse-softmax+ftrl-n-class restored)))
+      (ok (equal (multiple-value-list (test learner iris.sp :quiet-p t))
+                 (multiple-value-list (test restored iris.sp :quiet-p t))))
+      (ok (progn (train restored iris.sp) t))
+      (ok (= (sparse-softmax-ftrl-cache-mismatches restored) 0)))))

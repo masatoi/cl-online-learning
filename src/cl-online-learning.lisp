@@ -22,6 +22,10 @@
    :make-sparse-lr+adam :sparse-lr+adam-update :sparse-lr+adam-train :sparse-lr+adam-predict :sparse-lr+adam-test
    :make-sparse-lr+ftrl :sparse-lr+ftrl-update :sparse-lr+ftrl-train
    :sparse-lr+ftrl-predict :sparse-lr+ftrl-test
+   :make-softmax+ftrl :softmax+ftrl-update :softmax+ftrl-train
+   :softmax+ftrl-predict :softmax+ftrl-test
+   :make-sparse-softmax+ftrl :sparse-softmax+ftrl-update :sparse-softmax+ftrl-train
+   :sparse-softmax+ftrl-predict :sparse-softmax+ftrl-test
    :make-one-vs-rest :one-vs-rest-update :one-vs-rest-train :one-vs-rest-predict :one-vs-rest-test
    :make-one-vs-one :one-vs-one-update :one-vs-one-train :one-vs-one-predict :one-vs-one-test
    :make-multiclass-arow :multiclass-arow-update :multiclass-arow-train
@@ -155,6 +159,8 @@
       ;; generic (LENGTH <TYPE>-WEIGHT) below would return K, not the dimension.
       (multiclass-arow (length (svref (multiclass-arow-weight learner) 0)))
       (sparse-multiclass-arow (length (svref (sparse-multiclass-arow-weight learner) 0)))
+      (softmax+ftrl (length (svref (softmax+ftrl-weight learner) 0)))
+      (sparse-softmax+ftrl (length (svref (sparse-softmax+ftrl-weight learner) 0)))
       (t (length (funcall (intern (catstr (symbol-name (type-of learner)) "-WEIGHT")
                                   :cl-online-learning)
                           learner))))))
@@ -165,6 +171,8 @@
     (one-vs-rest     (one-vs-rest-n-class learner))
     (multiclass-arow (multiclass-arow-n-class learner))
     (sparse-multiclass-arow (sparse-multiclass-arow-n-class learner))
+    (softmax+ftrl (softmax+ftrl-n-class learner))
+    (sparse-softmax+ftrl (sparse-softmax+ftrl-n-class learner))
     (t 2)))
 
 (defun sparse-learner? (learner)
@@ -1699,6 +1707,359 @@ learner's weight, which is what lets the existing vector operators apply per row
   learner)
 
 (define-multi-class-learner-train/test-functions sparse-multiclass-arow)
+
+;;;; Softmax regression with FTRL-Proximal
+;;;;
+;;;; FTRL-Proximal is an optimizer, not a loss: the per-coordinate (z, n) state, the L1
+;;;; soft-threshold, the adaptive learning rate and the materialised weight cache are all
+;;;; LR+FTRL's, reused unchanged down to FTRL-WEIGHT-OF.  Only the gradient differs.
+;;;;
+;;;; McMahan et al. cover binary logistic regression only, so the multiclass loss is a
+;;;; choice rather than a transcription.  This is the multinomial logistic (softmax)
+;;;; loss, the standard multiclass extension of the loss LR+FTRL already optimizes:
+;;;;
+;;;;   f_k   = w_k . x + b_k                for every class k
+;;;;   p     = softmax(f)
+;;;;   loss  = -log p_y
+;;;;   g_k,i = (p_k - [k = y]) x_i          [k = y] is 1 for the true class, else 0
+;;;;
+;;;; Every class gets a non-zero gradient on every example, so an update touches all K
+;;;; rows at the input's non-zero coordinates.  At K = 2 this reduces to g_y = p_y - 1,
+;;;; which is exactly LR+FTRL's GSCALE.
+;;;;
+;;;; EXP overflows in single-float above roughly 88 and weights are unbounded, so the
+;;;; softmax subtracts the maximum score before exponentiating.  After that subtraction
+;;;; the largest exponent is 0, so nothing overflows, and the denominator is at least 1,
+;;;; so there is no division by zero.  Terms that underflow to 0 contribute 0, which is
+;;;; correct.  This is the first place in this file that needs such a guard -- SIGMOID
+;;;; computes 1/(1 + exp(-x)), where a large positive x merely underflows harmlessly.
+;;;;
+;;;; ALPHA, BETA, LAMBDA1 and LAMBDA2 must be treated as immutable after construction:
+;;;; every coordinate's weight is derived from them, so changing one silently
+;;;; invalidates the entire WEIGHT cache.
+
+(defstruct (softmax+ftrl (:constructor  %make-softmax+ftrl)
+                         (:print-object %print-softmax+ftrl))
+  input-dimension n-class weight bias
+  ;; meta parameters
+  alpha beta lambda1 lambda2
+  ;; per-coordinate state, the intercept's, and the score/probability scratch
+  z n z0 n0 tmp-p)
+
+(defun %print-softmax+ftrl (obj stream)
+  (format stream "#S(SOFTMAX+FTRL~%~T:INPUT-DIMENSION ~A~%~T:N-CLASS ~A~%~T:WEIGHT #(~A ...)~%~T:BIAS ~A~%~T:NONZERO-WEIGHTS ~A/~A)"
+          (softmax+ftrl-input-dimension obj)
+          (softmax+ftrl-n-class obj)
+          (%vec-head (svref (softmax+ftrl-weight obj) 0))
+          (%vec-head (softmax+ftrl-bias obj))
+          (reduce #'+ (softmax+ftrl-weight obj) :initial-value 0
+                  :key (lambda (row) (count-if-not #'zerop row)))
+          (* (softmax+ftrl-n-class obj) (softmax+ftrl-input-dimension obj))))
+
+(defun make-softmax+ftrl (input-dimension n-class alpha beta lambda1 lambda2)
+  (check-type input-dimension integer)
+  (check-type n-class integer)
+  (check-type alpha number)
+  (check-type beta number)
+  (check-type lambda1 number)
+  (check-type lambda2 number)
+  (assert (> input-dimension 0))
+  ;; With N-CLASS 2, N-CLASS-OF returns 2, CLOL-PREDICT takes the binary label path and
+  ;; silently misreads the dataset.  Same bound as MAKE-MULTICLASS-AROW.
+  (assert (> n-class 2))
+  (let ((alpha (coerce alpha 'single-float))
+        (beta (coerce beta 'single-float))
+        (lambda1 (coerce lambda1 'single-float))
+        (lambda2 (coerce lambda2 'single-float)))
+    ;; Assert AFTER coercion, not before.  A positive double such as 1d-50 satisfies
+    ;; (< 0.0 alpha) yet underflows to exactly 0.0 as a single-float, and ALPHA divides
+    ;; in every weight derivation -- the model would fill with NaN and signal nothing.
+    (assert (< 0.0 alpha))
+    (assert (<= 0.0 beta))
+    (assert (<= 0.0 lambda1))
+    (assert (<= 0.0 lambda2))
+    (%make-softmax+ftrl
+     :input-dimension input-dimension
+     :n-class n-class
+     :weight (%make-weight-vectors n-class input-dimension 0.0)
+     :bias (make-vec n-class 0.0)
+     :alpha alpha
+     :beta beta
+     :lambda1 lambda1
+     :lambda2 lambda2
+     :z (%make-weight-vectors n-class input-dimension 0.0)
+     :n (%make-weight-vectors n-class input-dimension 0.0)
+     :z0 (make-vec n-class 0.0)
+     :n0 (make-vec n-class 0.0)
+     :tmp-p (make-vec n-class 0.0))))
+
+(defun softmax+ftrl-predict (learner input)
+  (declare (type softmax+ftrl learner)
+           (type (simple-array single-float) input)
+           (optimize (speed 3) (safety 0)))
+  (let ((weight (softmax+ftrl-weight learner))
+        (bias (softmax+ftrl-bias learner))
+        (n-class (softmax+ftrl-n-class learner))
+        (max-f most-negative-single-float)
+        (max-i 0))
+    (declare (type simple-vector weight)
+             (type (simple-array single-float) bias)
+             (type fixnum n-class max-i)
+             (type single-float max-f))
+    ;; The softmax is monotone, so the argmax of the scores is the argmax of the
+    ;; probabilities -- normalising here would be wasted work.  Strict > means the lowest
+    ;; index wins a tie, as in ONE-VS-REST-PREDICT and MULTICLASS-AROW-PREDICT.
+    (loop for k of-type fixnum from 0 below n-class do
+      (let ((fk (+ (dot (the (simple-array single-float) (svref weight k)) input)
+                   (aref bias k))))
+        (declare (type single-float fk))
+        (when (> fk max-f)
+          (setf max-f fk
+                max-i k))))
+    max-i))
+
+;; training-label should be an integer class index (0 ... K-1).  The range is NOT
+;; checked. Unlike MULTICLASS-AROW-UPDATE, which indexes by the label and faults on a bad one, this
+;; body only compares against it, so an out-of-range label causes no fault -- just a wrong gradient:
+;; every class is treated as incorrect, so all K rows are pushed down with no positive target.
+;; Realistic cause: raw LIBSVM labels instead of :multiclass-p t.
+(defun softmax+ftrl-update (learner input training-label)
+  (declare (type softmax+ftrl learner)
+           (type (simple-array single-float) input)
+           (type fixnum training-label)
+           (optimize (speed 3) (safety 0)))
+  (let ((weight (softmax+ftrl-weight learner))
+        (bias (softmax+ftrl-bias learner))
+        (z (softmax+ftrl-z learner))
+        (n (softmax+ftrl-n learner))
+        (z0 (softmax+ftrl-z0 learner))
+        (n0 (softmax+ftrl-n0 learner))
+        (p (softmax+ftrl-tmp-p learner))
+        (n-class (softmax+ftrl-n-class learner))
+        (alpha (softmax+ftrl-alpha learner))
+        (beta (softmax+ftrl-beta learner))
+        (lambda1 (softmax+ftrl-lambda1 learner))
+        (lambda2 (softmax+ftrl-lambda2 learner)))
+    (declare (type simple-vector weight z n)
+             (type (simple-array single-float) bias z0 n0 p)
+             (type fixnum n-class)
+             (type single-float alpha beta lambda1 lambda2))
+    ;; 1. Score every class into P, tracking the maximum.
+    (let ((max-f most-negative-single-float))
+      (declare (type single-float max-f))
+      (loop for k of-type fixnum from 0 below n-class do
+        (let ((fk (+ (dot (the (simple-array single-float) (svref weight k)) input)
+                     (aref bias k))))
+          (declare (type single-float fk))
+          (setf (aref p k) fk)
+          (when (> fk max-f) (setf max-f fk))))
+      ;; 2. Turn P into probabilities.  Subtracting MAX-F before EXP is what keeps this
+      ;;    from overflowing: afterwards the largest exponent is 0, so no term exceeds
+      ;;    1.0, and SUM is at least 1.0 so the division is safe.
+      (let ((sum 0.0))
+        (declare (type single-float sum))
+        (loop for k of-type fixnum from 0 below n-class do
+          (let ((e (exp (- (aref p k) max-f))))
+            (declare (type single-float e))
+            (setf (aref p k) e)
+            (incf sum e)))
+        (loop for k of-type fixnum from 0 below n-class do
+          (setf (aref p k) (/ (aref p k) sum)))))
+    ;; 3. One FTRL step per class.  Within each row the z update must read the weight
+    ;;    that produced the score above, so the cache refresh comes after it -- the same
+    ;;    ordering LR+FTRL depends on, and just as load-bearing here.
+    (loop for k of-type fixnum from 0 below n-class do
+      (let ((gscale (- (aref p k) (if (= k training-label) 1.0 0.0)))
+            (weight-k (svref weight k))
+            (z-k (svref z k))
+            (n-k (svref n k)))
+        (declare (type single-float gscale)
+                 (type (simple-array single-float) weight-k z-k n-k))
+        (dovec weight-k i
+          (let* ((gi (* gscale (aref input i)))
+                 (ni (aref n-k i))
+                 (new-ni (+ ni (* gi gi))))
+            (declare (type single-float gi)
+                     (type (single-float 0.0) ni new-ni))
+            (incf (aref z-k i) (- gi (* (/ (- (sqrt new-ni) (sqrt ni)) alpha)
+                                        (aref weight-k i))))
+            (setf (aref n-k i) new-ni
+                  (aref weight-k i)
+                  (ftrl-weight-of (aref z-k i) new-ni alpha beta lambda1 lambda2))))
+        ;; The intercept is an always-1 feature and is deliberately NOT L1-regularised.
+        (let* ((nk0 (aref n0 k))
+               (new-n0 (+ nk0 (* gscale gscale))))
+          (declare (type (single-float 0.0) nk0 new-n0))
+          (incf (aref z0 k) (- gscale (* (/ (- (sqrt new-n0) (sqrt nk0)) alpha)
+                                         (aref bias k))))
+          (setf (aref n0 k) new-n0
+                (aref bias k)
+                (ftrl-weight-of (aref z0 k) new-n0 alpha beta 0.0 lambda2))))))
+  learner)
+
+(define-multi-class-learner-train/test-functions softmax+ftrl)
+
+;;; Sparse softmax + FTRL-Proximal
+;;;
+;;; Identical arithmetic to SOFTMAX+FTRL; only the traversal differs.  The per-class loop
+;;; walks the input's index-vector and nothing else, so an update is O(K * nnz).  Z, N and
+;;; WEIGHT rows are full-length dense arrays read and written only at the active indices;
+;;; untouched coordinates keep z = 0, hence w = 0, which is their initial value.
+
+(defstruct (sparse-softmax+ftrl (:constructor  %make-sparse-softmax+ftrl)
+                                (:print-object %print-sparse-softmax+ftrl))
+  input-dimension n-class weight bias
+  ;; meta parameters
+  alpha beta lambda1 lambda2
+  ;; per-coordinate state, the intercept's, and the score/probability scratch
+  z n z0 n0 tmp-p)
+
+(defun %print-sparse-softmax+ftrl (obj stream)
+  (format stream "#S(SPARSE-SOFTMAX+FTRL~%~T:INPUT-DIMENSION ~A~%~T:N-CLASS ~A~%~T:WEIGHT #(~A ...)~%~T:BIAS ~A~%~T:NONZERO-WEIGHTS ~A/~A)"
+          (sparse-softmax+ftrl-input-dimension obj)
+          (sparse-softmax+ftrl-n-class obj)
+          (%vec-head (svref (sparse-softmax+ftrl-weight obj) 0))
+          (%vec-head (sparse-softmax+ftrl-bias obj))
+          (reduce #'+ (sparse-softmax+ftrl-weight obj) :initial-value 0
+                  :key (lambda (row) (count-if-not #'zerop row)))
+          (* (sparse-softmax+ftrl-n-class obj) (sparse-softmax+ftrl-input-dimension obj))))
+
+(defun make-sparse-softmax+ftrl (input-dimension n-class alpha beta lambda1 lambda2)
+  (check-type input-dimension integer)
+  (check-type n-class integer)
+  (check-type alpha number)
+  (check-type beta number)
+  (check-type lambda1 number)
+  (check-type lambda2 number)
+  (assert (> input-dimension 0))
+  (assert (> n-class 2))
+  (let ((alpha (coerce alpha 'single-float))
+        (beta (coerce beta 'single-float))
+        (lambda1 (coerce lambda1 'single-float))
+        (lambda2 (coerce lambda2 'single-float)))
+    ;; Assert AFTER coercion; see the comment in MAKE-SOFTMAX+FTRL.
+    (assert (< 0.0 alpha))
+    (assert (<= 0.0 beta))
+    (assert (<= 0.0 lambda1))
+    (assert (<= 0.0 lambda2))
+    (%make-sparse-softmax+ftrl
+     :input-dimension input-dimension
+     :n-class n-class
+     :weight (%make-weight-vectors n-class input-dimension 0.0)
+     :bias (make-vec n-class 0.0)
+     :alpha alpha
+     :beta beta
+     :lambda1 lambda1
+     :lambda2 lambda2
+     :z (%make-weight-vectors n-class input-dimension 0.0)
+     :n (%make-weight-vectors n-class input-dimension 0.0)
+     :z0 (make-vec n-class 0.0)
+     :n0 (make-vec n-class 0.0)
+     :tmp-p (make-vec n-class 0.0))))
+
+(defun sparse-softmax+ftrl-predict (learner input)
+  (declare (type sparse-softmax+ftrl learner)
+           (type sparse-vector input)
+           (optimize (speed 3) (safety 0)))
+  (let ((weight (sparse-softmax+ftrl-weight learner))
+        (bias (sparse-softmax+ftrl-bias learner))
+        (n-class (sparse-softmax+ftrl-n-class learner))
+        (max-f most-negative-single-float)
+        (max-i 0))
+    (declare (type simple-vector weight)
+             (type (simple-array single-float) bias)
+             (type fixnum n-class max-i)
+             (type single-float max-f))
+    (loop for k of-type fixnum from 0 below n-class do
+      (let ((fk (+ (ds-dot (the (simple-array single-float) (svref weight k)) input)
+                   (aref bias k))))
+        (declare (type single-float fk))
+        (when (> fk max-f)
+          (setf max-f fk
+                max-i k))))
+    max-i))
+
+;; training-label should be an integer class index (0 ... K-1).  The range is NOT
+;; checked, for the same reason as SOFTMAX+FTRL-UPDATE above: this body only compares against
+;; training-label, never indexes by it, so an out-of-range value causes no fault, only a silently
+;; wrong gradient (all K rows pushed down).
+(defun sparse-softmax+ftrl-update (learner input training-label)
+  (declare (type sparse-softmax+ftrl learner)
+           (type sparse-vector input)
+           (type fixnum training-label)
+           (optimize (speed 3) (safety 0)))
+  (let ((weight (sparse-softmax+ftrl-weight learner))
+        (bias (sparse-softmax+ftrl-bias learner))
+        (z (sparse-softmax+ftrl-z learner))
+        (n (sparse-softmax+ftrl-n learner))
+        (z0 (sparse-softmax+ftrl-z0 learner))
+        (n0 (sparse-softmax+ftrl-n0 learner))
+        (p (sparse-softmax+ftrl-tmp-p learner))
+        (n-class (sparse-softmax+ftrl-n-class learner))
+        (alpha (sparse-softmax+ftrl-alpha learner))
+        (beta (sparse-softmax+ftrl-beta learner))
+        (lambda1 (sparse-softmax+ftrl-lambda1 learner))
+        (lambda2 (sparse-softmax+ftrl-lambda2 learner))
+        (index-vector (sparse-vector-index-vector input))
+        (value-vector (sparse-vector-value-vector input)))
+    (declare (type simple-vector weight z n)
+             (type (simple-array single-float) bias z0 n0 p value-vector)
+             (type (simple-array fixnum) index-vector)
+             (type fixnum n-class)
+             (type single-float alpha beta lambda1 lambda2))
+    ;; 1. Score every class into P, tracking the maximum.
+    (let ((max-f most-negative-single-float))
+      (declare (type single-float max-f))
+      (loop for k of-type fixnum from 0 below n-class do
+        (let ((fk (+ (ds-dot (the (simple-array single-float) (svref weight k)) input)
+                     (aref bias k))))
+          (declare (type single-float fk))
+          (setf (aref p k) fk)
+          (when (> fk max-f) (setf max-f fk))))
+      ;; 2. Turn P into probabilities.  Subtracting MAX-F before EXP is what keeps this
+      ;;    from overflowing.
+      (let ((sum 0.0))
+        (declare (type single-float sum))
+        (loop for k of-type fixnum from 0 below n-class do
+          (let ((e (exp (- (aref p k) max-f))))
+            (declare (type single-float e))
+            (setf (aref p k) e)
+            (incf sum e)))
+        (loop for k of-type fixnum from 0 below n-class do
+          (setf (aref p k) (/ (aref p k) sum)))))
+    ;; 3. One FTRL step per class, over the active coordinates only.
+    (loop for k of-type fixnum from 0 below n-class do
+      (let ((gscale (- (aref p k) (if (= k training-label) 1.0 0.0)))
+            (weight-k (svref weight k))
+            (z-k (svref z k))
+            (n-k (svref n k)))
+        (declare (type single-float gscale)
+                 (type (simple-array single-float) weight-k z-k n-k))
+        (dosvec input j
+          (let* ((i (aref index-vector j))
+                 (gi (* gscale (aref value-vector j)))
+                 (ni (aref n-k i))
+                 (new-ni (+ ni (* gi gi))))
+            (declare (type fixnum i)
+                     (type single-float gi)
+                     (type (single-float 0.0) ni new-ni))
+            (incf (aref z-k i) (- gi (* (/ (- (sqrt new-ni) (sqrt ni)) alpha)
+                                        (aref weight-k i))))
+            (setf (aref n-k i) new-ni
+                  (aref weight-k i)
+                  (ftrl-weight-of (aref z-k i) new-ni alpha beta lambda1 lambda2))))
+        ;; The intercept is an always-1 feature and is deliberately NOT L1-regularised.
+        (let* ((nk0 (aref n0 k))
+               (new-n0 (+ nk0 (* gscale gscale))))
+          (declare (type (single-float 0.0) nk0 new-n0))
+          (incf (aref z0 k) (- gscale (* (/ (- (sqrt new-n0) (sqrt nk0)) alpha)
+                                         (aref bias k))))
+          (setf (aref n0 k) new-n0
+                (aref bias k)
+                (ftrl-weight-of (aref z0 k) new-n0 alpha beta 0.0 lambda2))))))
+  learner)
+
+(define-multi-class-learner-train/test-functions sparse-softmax+ftrl)
 
 ;;; Save and restore models
 

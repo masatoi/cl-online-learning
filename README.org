@@ -18,6 +18,7 @@ A collection of machine learning algorithms for online linear classification wri
 - one-vs-rest ( K binary classifier required )
 - one-vs-one ( K*(K-1)/2 binary classifier required )
 - multiclass AROW ( native, K weight vectors in a single learner ) (Crammer, Koby, Alex Kulesza, and Mark Dredze. "Adaptive regularization of weight vectors." Machine Learning 91.2 (2013): 155-187. Figure 3, the top-1 version.)
+- softmax + FTRL-Proximal ( native, multinomial logistic regression with L1 ) -- the only multiclass learner here whose class scores are coupled through a softmax rather than fitted as independent sub-problems; the optimizer is the FTRL-Proximal of McMahan et al., KDD 2013, already cited under Binary classifier
 
 *** Command line tools
 - Implemented as roswell script
