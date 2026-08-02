@@ -193,6 +193,48 @@
   (train mnist-mc-arow.sp mnist-train.sp)
   (test mnist-mc-arow.sp mnist-test.sp)))
 
+;;; Softmax + FTRL-Proximal: the one learner here that produces an exactly sparse model.
+;;
+;; Unlike ONE-VS-REST, ONE-VS-ONE and MULTICLASS-AROW, this couples all ten class scores
+;; through a single softmax.  Its argument list is (dim n-class alpha beta lambda1 lambda2);
+;; alpha 0.1 was the best of {0.01, 0.1, 1.0} here, and beta 1.0 is the paper's default.
+;;
+;; What lambda1 buys, measured on one run of the form below:
+;;
+;;   lambda1     time   accuracy   non-zero weights (of 10 x 784 = 7840)
+;;      0.0    3.1 sec   92.44%     7170     (the 670 zeros are dead border pixels, not L1)
+;;     10.0    5.3 sec   92.45%     4576
+;;     50.0    6.9 sec   92.44%     3222     <- 59% of the model gone at no accuracy cost
+;;    300.0    6.2 sec   91.61%     1810
+;;
+;; References measured in the same run, which reproduce their own comments above:
+;;   MNIST-MC-AROW.SP                   0.9 sec  92.77%
+;;   ONE-VS-ONE + SPARSE-AROW           1.9 sec  94.65%
+;;   ONE-VS-REST + SPARSE-LR+FTRL       5.1 sec  91.83%
+;;
+;; So on MNIST this is not the accuracy choice (ONE-VS-ONE wins) nor the speed choice
+;; (MULTICLASS-AROW wins, ~6x faster: its top-1 update writes 2 of 10 rows where softmax
+;; writes all 10, and FTRL does two square roots per class per coordinate).  It beats both
+;; ONE-VS-REST variants, which is the coupling paying off against the same reduction.
+;; Its distinguishing result is the third column: no other learner here can drop half the
+;; model and keep its accuracy.
+;;
+;; Note the sparsity is statistical, not a runtime saving: rows are stored as full-length
+;; dense arrays either way, so a sparser model is not a faster or smaller one in process.
+;; Saving to disk at lambda1 300.0 gives 356 KB against 460 KB at lambda1 0.0.
+;;
+;; 5.3 sec Accuracy: 92.45%, Correct: 9245, Total: 10000
+(defparameter mnist-softmax.sp
+  (make-sparse-softmax+ftrl mnist-dim mnist-class 0.1 1.0 10.0 1.0))
+(time (loop repeat 10 do
+  (train mnist-softmax.sp mnist-train.sp)
+  (test mnist-softmax.sp mnist-test.sp)))
+
+;; Count the exact zeros the L1 term produced.
+(reduce #'+ (clol::sparse-softmax+ftrl-weight mnist-softmax.sp) :initial-value 0
+        :key (lambda (row) (count-if-not #'zerop row)))
+;; => 4576
+
 ;; Evaluation took:
 ;;   1.347 seconds of real time
 ;;   1.348425 seconds of total run time (1.325365 user, 0.023060 system)
