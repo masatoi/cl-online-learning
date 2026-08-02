@@ -1498,3 +1498,111 @@
     (ok (= (dim-of learner) iris-dim))
     (ok (sparse-learner? learner))
     (ok (> (test learner iris.sp :quiet-p t) 70))))
+
+;;;; ------------------------------------------------------------------------
+;;;; Softmax regression with FTRL-Proximal
+;;;;
+;;;; The library's first learner whose class scores are coupled: ONE-VS-REST and
+;;;; ONE-VS-ONE fit independent sub-problems and MULTICLASS-AROW uses the top-1
+;;;; hinge, so nothing here previously produced a distribution over classes.
+;;;;
+;;;;   f_k   = w_k . x + b_k
+;;;;   p     = softmax(f)
+;;;;   g_k,i = (p_k - [k = y]) x_i
+;;;;
+;;;; The FTRL machinery around that gradient -- the (z, n) state, the L1
+;;;; soft-threshold and the materialised weight cache -- is LR+FTRL's, unchanged.
+
+(defun softmax-ftrl-cache-mismatches (learner)
+  "Count (class, coordinate) pairs whose cached WEIGHT differs from a fresh derivation."
+  (let ((w (clol::softmax+ftrl-weight learner))
+        (z (clol::softmax+ftrl-z learner))
+        (n (clol::softmax+ftrl-n learner))
+        (alpha (clol::softmax+ftrl-alpha learner))
+        (beta (clol::softmax+ftrl-beta learner))
+        (lambda1 (clol::softmax+ftrl-lambda1 learner))
+        (lambda2 (clol::softmax+ftrl-lambda2 learner))
+        (mismatch 0))
+    (dotimes (k (clol::softmax+ftrl-n-class learner) mismatch)
+      (dotimes (i (length (svref w k)))
+        (unless (= (aref (svref w k) i)
+                   (clol::ftrl-weight-of (aref (svref z k) i) (aref (svref n k) i)
+                                         alpha beta lambda1 lambda2))
+          (incf mismatch))))))
+
+(defun softmax-ftrl-all-finite-p (learner)
+  "True when every weight and bias is finite.  NaN and infinity both fail the comparison,
+since neither satisfies <= against a finite bound."
+  (flet ((finite-p (x) (<= (abs x) most-positive-single-float)))
+    (and (every #'finite-p (clol::softmax+ftrl-bias learner))
+         (every (lambda (row) (every #'finite-p row))
+                (clol::softmax+ftrl-weight learner)))))
+
+(deftest softmax+ftrl-weight-cache-invariant
+  ;; Carried over from LR+FTRL, now over all K x dim entries.  WEIGHT caches a value
+  ;; derived from (z, n); it is correct only if the update refreshes it AFTER updating
+  ;; z and n.  Refreshing first still trains and still reaches indistinguishable
+  ;; accuracy, so no accuracy assertion can catch the bug.
+  (let ((learner (make-softmax+ftrl iris-dim 3 0.1 1.0 1.0 1.0)))
+    (dotimes (i 5) (train learner iris))
+    (ok (= (softmax-ftrl-cache-mismatches learner) 0))))
+
+(deftest softmax+ftrl-probabilities-sum-to-one
+  ;; The defining property of a softmax, with no counterpart anywhere else in the suite.
+  ;; TMP-P holds the probabilities from the most recent update.
+  (let ((learner (make-softmax+ftrl iris-dim 3 0.1 1.0 1.0 1.0)))
+    (dotimes (i 5) (train learner iris))
+    (let ((p (clol::softmax+ftrl-tmp-p learner)))
+      (ok (approximately-equal (reduce #'+ p) 1.0))
+      (ok (every (lambda (pk) (and (<= 0.0 pk) (<= pk 1.0))) p)))))
+
+(deftest softmax+ftrl-survives-extreme-scores
+  ;; EXP overflows in single-float above roughly 88 and weights are unbounded, so the
+  ;; softmax must subtract the maximum score before exponentiating.  Ordinary data never
+  ;; reaches that range, so without this test the guard could be dropped and every other
+  ;; test would still pass.
+  ;;
+  ;; A large NEGATIVE z produces a large POSITIVE weight -- FTRL-WEIGHT-OF negates its
+  ;; numerator -- and it is a large positive score that overflows EXP.  The injection
+  ;; targets the intercept, whose feature is always 1.0, so the resulting score does not
+  ;; depend on the sign of any input coordinate.  Z0 and BIAS are set together so the
+  ;; weight-cache invariant still holds going in, and BIAS is derived with lambda1 0.0
+  ;; because the intercept is not L1-regularised.
+  (let ((learner (make-softmax+ftrl iris-dim 3 0.1 1.0 1.0 1.0))
+        (datum (first iris)))
+    (setf (aref (clol::softmax+ftrl-z0 learner) 0) -1e30
+          (aref (clol::softmax+ftrl-bias learner) 0)
+          (clol::ftrl-weight-of -1e30 0.0 0.1 1.0 0.0 1.0))
+    (ok (handler-case
+            (progn (clol::softmax+ftrl-update learner (cdr datum) (car datum))
+                   (softmax-ftrl-all-finite-p learner))
+          (error () nil)))))
+
+(deftest metadata-of-softmax+ftrl
+  (let ((learner (make-softmax+ftrl iris-dim 3 0.1 1.0 1.0 1.0)))
+    (ok (= (dim-of learner) iris-dim))
+    (ok (= (n-class-of learner) 3))
+    (ok (null (sparse-learner? learner)))))
+
+(deftest softmax+ftrl-rejects-bad-parameters
+  ;; ASSERT establishes a CONTINUE restart, so these use HANDLER-CASE rather than ROVE's
+  ;; SIGNALS, which does not reliably catch conditions raised under a restart.
+  ;;
+  ;; N-CLASS 2 is rejected because N-CLASS-OF would then return 2, putting CLOL-PREDICT
+  ;; on the binary label path and silently misreading the dataset.
+  (ok (handler-case (progn (make-softmax+ftrl iris-dim 2 0.1 1.0 1.0 1.0) nil)
+        (error () t)))
+  (ok (handler-case (progn (make-softmax+ftrl iris-dim 3 0.0 1.0 1.0 1.0) nil)
+        (error () t)))
+  (ok (handler-case (progn (make-softmax+ftrl iris-dim 3 -0.1 1.0 1.0 1.0) nil)
+        (error () t)))
+  (ok (handler-case (progn (make-softmax+ftrl iris-dim 3 0.1 -1.0 1.0 1.0) nil)
+        (error () t)))
+  (ok (handler-case (progn (make-softmax+ftrl iris-dim 3 0.1 1.0 -1.0 1.0) nil)
+        (error () t)))
+  (ok (handler-case (progn (make-softmax+ftrl iris-dim 3 0.1 1.0 1.0 -1.0) nil)
+        (error () t)))
+  ;; A positive double that underflows to 0.0 as a single-float must be rejected too:
+  ;; ALPHA divides in every weight derivation, so 0.0 would fill the model with NaN.
+  (ok (handler-case (progn (make-softmax+ftrl iris-dim 3 1d-50 1.0 1.0 1.0) nil)
+        (error () t))))
