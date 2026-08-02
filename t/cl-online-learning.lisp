@@ -117,28 +117,27 @@
     (train learner a1a)
     (ok (approximately-equal
          (clol::scw-weight learner)
-         #(-0.98295295 -0.65914494 -0.031455822 0.5798609 0.38818732 0.030705344
-           -0.15367489 0.051715184 0.50597805 0.037574783 -0.17969297 0.0 0.0
-           -0.22125426 0.18044585 -0.011903975 0.23227699 -0.32580677 0.043461584
-           -0.13781326 -0.08209345 -0.1786037 0.74040663 -0.29156005 0.29303098
-           -0.43951267 -0.17839839 0.0 0.2317836 -0.014894724 -0.20716466 0.8622375
-           -0.5588806 -0.1 -1.1915166 -0.1786037 -0.13781326 0.024209403 0.80987746
-           0.7040549 -0.60725564 -0.5788029 -0.065921485 -0.5396214 -0.27901253 0.1
-           0.41941625 -0.39766312 -0.6353456 0.15467837 0.7905486 0.40488708
-           -0.022376735 -0.20530155 0.015786178 -0.25072026 -0.48218486 -0.1 -0.11868681
-           0.0 0.8976352 -0.75593835 0.43876946 -0.6384784 -0.29312703 -0.40830323
-           0.032387145 -0.066568345 -0.77908194 -0.14017807 -0.13026528 -0.35811645
-           -0.024318479 -0.852144 0.82774675 -0.39150235 0.60441923 -0.7892854
-           0.053472843 -0.19516772 0.3430312 0.2077534 0.010774406 0.1 -0.1945954
-           -0.37858498 0.0059698746 -2.1962076e-4 0.0 -0.10374499 0.19700837 0.1
-           -0.10275582 -0.19743825 -0.0031015128 0.0 0.0 0.18179809 0.08907831
-           0.003323242 0.0 0.0 -0.3592167 0.0 -0.1 0.0 -0.1 0.0 -0.004009977 -0.09096124
-           0.0 0.1 -0.1 0.0 0.0 0.0 0.0 0.1 -0.1 0.0 0.0 0.0 0.0)))
-    (ok (approximately-equal (clol::scw-bias learner) -0.41396368))
+         #(-0.87828755 -0.5415421 -0.07633029 0.5217547 0.351524 0.027187029 -0.13061534
+           0.10376779 0.42823774 0.06166041 -0.18010733 0.0 0.0 -0.27569094 0.14948452
+           -0.03640242 0.17697552 -0.23557489 -0.0037389463 -0.15245625 -0.04595512
+           -0.20079497 0.6537243 -0.25258183 0.22528283 -0.3609594 -0.19548479 0.0
+           0.19462007 -0.051685147 -0.19562283 0.831331 -0.54024863 -0.05107313 -1.0817412
+           -0.20079497 -0.15245625 -0.012929875 0.7803949 0.65949327 -0.5257958 -0.5038966
+           -0.10120084 -0.4772362 -0.2416912 0.1 0.3663189 -0.3223224 -0.5972657 0.107594535
+           0.7056913 0.33651575 -0.036645878 -0.13933736 0.050008103 -0.15463175 -0.44995713
+           -0.1 -0.1155774 0.0 0.8761916 -0.66649604 0.38410974 -0.5567503 -0.2767407
+           -0.4035055 0.010606954 -0.031063486 -0.81316733 -0.12886563 -0.16021922
+           -0.33852738 0.0031951363 -0.81262624 0.80988944 -0.33280993 0.58294165 -0.7660264
+           0.099543154 -0.22840413 0.37913436 0.20374884 0.041225184 0.1 -0.19428548
+           -0.3786459 0.004212573 -2.1295995e-4 0.0 -0.13415751 0.19702229 0.1 -0.058082707
+           -0.15863694 0.012297295 0.0 0.0 0.09168359 0.09662194 0.0042170435 -0.028281245
+           0.0 -0.32231373 0.014162065 -0.1 0.0 -0.11583499 0.0 -0.0039965957 -0.028249592
+           0.0 0.1 -0.1 0.0 0.0 0.0 0.0 0.1 -0.11981982 0.0 0.0 0.0 0.0)))
+    (ok (approximately-equal (clol::scw-bias learner) -0.35692087))
     (ok (approximately-equal
          (multiple-value-bind (accuracy n-correct n-total) (test learner a1a)
            (list accuracy n-correct n-total))
-         '(84.610596 1358 1605)))))
+         '(84.6729 1359 1605)))))
 
 (deftest dense-binary-lr+sgd
   (let ((learner (make-lr+sgd a1a-dim 0.00001 0.01)))
@@ -255,28 +254,27 @@
     (train learner a1a.sp)
     (ok (approximately-equal
          (clol::sparse-scw-weight learner)
-         #(-0.98295295 -0.65914494 -0.031455822 0.5798609 0.38818732 0.030705344
-           -0.15367489 0.051715184 0.50597805 0.037574783 -0.17969297 0.0 0.0
-           -0.22125426 0.18044585 -0.011903975 0.23227699 -0.32580677 0.043461584
-           -0.13781326 -0.08209345 -0.1786037 0.74040663 -0.29156005 0.29303098
-           -0.43951267 -0.17839839 0.0 0.2317836 -0.014894724 -0.20716466 0.8622375
-           -0.5588806 -0.1 -1.1915166 -0.1786037 -0.13781326 0.024209403 0.80987746
-           0.7040549 -0.60725564 -0.5788029 -0.065921485 -0.5396214 -0.27901253 0.1
-           0.41941625 -0.39766312 -0.6353456 0.15467837 0.7905486 0.40488708
-           -0.022376735 -0.20530155 0.015786178 -0.25072026 -0.48218486 -0.1 -0.11868681
-           0.0 0.8976352 -0.75593835 0.43876946 -0.6384784 -0.29312703 -0.40830323
-           0.032387145 -0.066568345 -0.77908194 -0.14017807 -0.13026528 -0.35811645
-           -0.024318479 -0.852144 0.82774675 -0.39150235 0.60441923 -0.7892854
-           0.053472843 -0.19516772 0.3430312 0.2077534 0.010774406 0.1 -0.1945954
-           -0.37858498 0.0059698746 -2.1962076e-4 0.0 -0.10374499 0.19700837 0.1
-           -0.10275582 -0.19743825 -0.0031015128 0.0 0.0 0.18179809 0.08907831
-           0.003323242 0.0 0.0 -0.3592167 0.0 -0.1 0.0 -0.1 0.0 -0.004009977 -0.09096124
-           0.0 0.1 -0.1 0.0 0.0 0.0 0.0 0.1 -0.1 0.0 0.0 0.0 0.0)))
-    (ok (approximately-equal (clol::sparse-scw-bias learner) -0.41396368))
+         #(-0.87828755 -0.5415421 -0.07633029 0.5217547 0.351524 0.027187029 -0.13061534
+           0.10376779 0.42823774 0.06166041 -0.18010733 0.0 0.0 -0.27569094 0.14948452
+           -0.03640242 0.17697552 -0.23557489 -0.0037389463 -0.15245625 -0.04595512
+           -0.20079497 0.6537243 -0.25258183 0.22528283 -0.3609594 -0.19548479 0.0
+           0.19462007 -0.051685147 -0.19562283 0.831331 -0.54024863 -0.05107313 -1.0817412
+           -0.20079497 -0.15245625 -0.012929875 0.7803949 0.65949327 -0.5257958 -0.5038966
+           -0.10120084 -0.4772362 -0.2416912 0.1 0.3663189 -0.3223224 -0.5972657 0.107594535
+           0.7056913 0.33651575 -0.036645878 -0.13933736 0.050008103 -0.15463175 -0.44995713
+           -0.1 -0.1155774 0.0 0.8761916 -0.66649604 0.38410974 -0.5567503 -0.2767407
+           -0.4035055 0.010606954 -0.031063486 -0.81316733 -0.12886563 -0.16021922
+           -0.33852738 0.0031951363 -0.81262624 0.80988944 -0.33280993 0.58294165 -0.7660264
+           0.099543154 -0.22840413 0.37913436 0.20374884 0.041225184 0.1 -0.19428548
+           -0.3786459 0.004212573 -2.1295995e-4 0.0 -0.13415751 0.19702229 0.1 -0.058082707
+           -0.15863694 0.012297295 0.0 0.0 0.09168359 0.09662194 0.0042170435 -0.028281245
+           0.0 -0.32231373 0.014162065 -0.1 0.0 -0.11583499 0.0 -0.0039965957 -0.028249592
+           0.0 0.1 -0.1 0.0 0.0 0.0 0.0 0.1 -0.11981982 0.0 0.0 0.0 0.0)))
+    (ok (approximately-equal (clol::sparse-scw-bias learner) -0.35692087))
     (ok (approximately-equal
          (multiple-value-bind (accuracy n-correct n-total) (test learner a1a.sp)
            (list accuracy n-correct n-total))
-         '(84.610596 1358 1605)))))
+         '(84.6729 1359 1605)))))
 
 (deftest sparse-binary-lr+sgd
   (let ((learner (make-sparse-lr+sgd a1a-dim 0.00001 0.01)))
@@ -378,11 +376,11 @@
     (ok (approximately-equal
          (clol::scw-weight
           (aref (clol::one-vs-rest-learners-vector learner) 0))
-         #(-0.32328632 1.0381005 -0.9833101 -0.7999594)))
+         #(-0.31136614 0.96680593 -0.93539095 -0.748183)))
     (ok (approximately-equal
          (clol::scw-bias
           (aref (clol::one-vs-rest-learners-vector learner) 0))
-         -0.24043615))
+         -0.29673624))
     (ok (approximately-equal
          (multiple-value-bind (accuracy n-correct n-total) (test learner iris)
            (list accuracy n-correct n-total))
@@ -458,11 +456,11 @@
     (ok (approximately-equal
          (clol::scw-weight
           (aref (clol::one-vs-one-learners-vector learner) 0))
-         #(-0.19852017 1.0903767 -0.84503853 -0.6723404)))
+         #(-0.19575952 1.0162352 -0.80681705 -0.63435215)))
     (ok (approximately-equal
          (clol::scw-bias
           (aref (clol::one-vs-one-learners-vector learner) 0))
-         -0.21044569))
+         -0.26885074))
     (ok (approximately-equal
          (multiple-value-bind (accuracy n-correct n-total) (test learner iris)
            (list accuracy n-correct n-total))
@@ -538,11 +536,11 @@
     (ok (approximately-equal
          (clol::sparse-scw-weight
           (aref (clol::one-vs-rest-learners-vector learner) 0))
-         #(-0.32328632 1.0381005 -0.9833101 -0.7999594)))
+         #(-0.31136614 0.96680593 -0.93539095 -0.748183)))
     (ok (approximately-equal
          (clol::sparse-scw-bias
           (aref (clol::one-vs-rest-learners-vector learner) 0))
-         -0.24043615))
+         -0.29673624))
     (ok (approximately-equal
          (multiple-value-bind (accuracy n-correct n-total) (test learner iris.sp)
            (list accuracy n-correct n-total))
@@ -618,11 +616,11 @@
     (ok (approximately-equal
          (clol::sparse-scw-weight
           (aref (clol::one-vs-one-learners-vector learner) 0))
-         #(-0.19852017 1.0903767 -0.84503853 -0.6723404)))
+         #(-0.19575952 1.0162352 -0.80681705 -0.63435215)))
     (ok (approximately-equal
          (clol::sparse-scw-bias
           (aref (clol::one-vs-one-learners-vector learner) 0))
-         -0.21044569))
+         -0.26885074))
     (ok (approximately-equal
          (multiple-value-bind (accuracy n-correct n-total) (test learner iris.sp)
            (list accuracy n-correct n-total))
@@ -1785,3 +1783,71 @@ since neither satisfies <= against a finite bound."
                  (multiple-value-list (test restored iris.sp :quiet-p t))))
       (ok (progn (train restored iris.sp) t))
       (ok (= (sparse-softmax-ftrl-cache-mismatches restored) 0)))))
+
+;;;; ------------------------------------------------------------------------
+;;;; SCW-I's alpha
+;;;;
+;;;; Proposition 1 of Wang, Zhao & Hoi, "Exact Soft Confidence-Weighted Learning",
+;;;; ICML 2012 gives
+;;;;
+;;;;   alpha = min{C, max{0, (1/(v zeta)) (-m psi + sqrt(m^2 phi^4/4 + v phi^2 zeta))}}
+;;;;
+;;;; and the 1/(v zeta) factor was missing here until 2026-08-02.  Because alpha is
+;;;; capped at C, a small C hid the error -- at eta 0.9 and C 0.1, 663 of 679 updates on
+;;;; a1a sat at the cap, so alpha was effectively the constant 0.1 and SCW-I's adaptive
+;;;; step size did nothing.  Raising C past that exposed it.  Measured on a1a with the
+;;;; old code at eta 0.7 over 20 epochs, accuracy ran 83.30 / 86.48 / 87.17 for C
+;;;; 0.001 / 0.01 / 0.1 and then 84.42 / 83.36 / 82.93 for C 1.0 / 10.0 / 100.0 -- so
+;;;; the best setting was always the smallest C that still learned, which is the
+;;;; opposite of what an upper bound on the step size should do.
+;;;;
+;;;; These two tests pin alpha against a closed form derived by hand from the paper
+;;;; rather than captured from the code.  With every weight at 0 and Sigma the identity,
+;;;; the first update has m = 0, so
+;;;;
+;;;;   v     = sigma0 + x.x = 1 + x.x
+;;;;   alpha = (1/(v zeta)) sqrt(v phi^2 zeta) = phi / sqrt(v zeta)
+;;;;   weight <- alpha y x      bias <- alpha y
+;;;;
+;;;; C is set to 100.0 so the cap cannot bind on either the correct value (0.204 here) or
+;;;; the buggy one (8.06), which is what makes these tests discriminate between them.
+
+(deftest scw-alpha-matches-the-paper-closed-form
+  (let* ((learner (make-scw a1a-dim 0.9 100.0))
+         (datum (first a1a))
+         (y (car datum))
+         (x (cdr datum))
+         (v (+ 1.0 (dot x x)))
+         (alpha (/ (clol::scw-phi learner)
+                   (sqrt (* v (clol::scw-zeta learner))))))
+    ;; If the cap bound, both the correct alpha and the buggy one would collapse to C
+    ;; and this test would stop discriminating between them.
+    (ok (< alpha (clol::scw-C learner)))
+    (clol::scw-update learner x y)
+    (ok (approximately-equal (clol::scw-bias learner) (* alpha y)))
+    (ok (approximately-equal (clol::scw-weight learner)
+                             (map 'vector (lambda (xi) (* alpha y xi)) x)))))
+
+(deftest sparse-scw-alpha-matches-the-paper-closed-form
+  (let* ((learner (make-sparse-scw a1a-dim 0.9 100.0))
+         (datum (first a1a.sp))
+         (y (car datum))
+         (x (cdr datum))
+         (v (+ 1.0 (reduce #'+ (sparse-vector-value-vector x)
+                           :initial-value 0.0 :key (lambda (xi) (* xi xi)))))
+         (alpha (/ (clol::sparse-scw-phi learner)
+                   (sqrt (* v (clol::sparse-scw-zeta learner))))))
+    (ok (< alpha (clol::sparse-scw-C learner)))
+    (clol::sparse-scw-update learner x y)
+    (ok (approximately-equal (clol::sparse-scw-bias learner) (* alpha y)))
+    (ok (every (lambda (i xi)
+                 (approximately-equal (aref (clol::sparse-scw-weight learner) i)
+                                      (* alpha y xi)))
+               (sparse-vector-index-vector x)
+               (sparse-vector-value-vector x)))
+    ;; And the coordinates the datum does not touch must still be 0 -- EVERY above walks
+    ;; only the index vector, so a write outside it would otherwise go unnoticed.
+    (let ((touched (coerce (sparse-vector-index-vector x) 'list)))
+      (ok (loop for i from 0 below a1a-dim
+                always (or (member i touched)
+                           (zerop (aref (clol::sparse-scw-weight learner) i))))))))

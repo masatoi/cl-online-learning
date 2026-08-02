@@ -229,6 +229,10 @@
 (time (loop repeat 1000 do (train scw-learner a9a-train)))
 (test scw-learner a9a-test)
 
+;; STALE: measured before SCW-I's alpha was corrected on 2026-08-02 (the 1/(v zeta)
+;; factor of Proposition 1 was missing).  At C 0.1 the old alpha sat at the C cap on
+;; almost every update, so this figure is for what was effectively a fixed step size.
+;; Re-measure before trusting it; the a9a dataset is not in this repository.
 ;; Accuracy: 83.98133%, Correct: 13673, Total: 16281
 
 ;; Evaluation took:
