@@ -1679,3 +1679,64 @@ since neither satisfies <= against a finite bound."
     (ok (= (dim-of learner) iris-dim))
     (ok (= (n-class-of learner) 3))
     (ok (sparse-learner? learner))))
+
+(deftest softmax+ftrl-learns-iris
+  ;; Chance on this 3-class dataset is 33%.  Measured here: 91.33% over ten passes,
+  ;; against ONE-VS-REST + SPARSE-LR+FTRL's 87.33% and ONE-VS-ONE + SPARSE-LR+FTRL's
+  ;; 90.67% over the same ten passes, which are the natural comparisons for a coupled
+  ;; softmax model.  The floor sits far below the measured figure so that float drift
+  ;; cannot trip it while a genuine regression still would.
+  (let ((learner (make-softmax+ftrl iris-dim 3 0.1 1.0 1.0 1.0)))
+    (dotimes (i 10) (train learner iris))
+    (ok (> (test learner iris :quiet-p t) 70.0))))
+
+(deftest softmax+ftrl-l1-sparsity
+  ;; Exact zeros are what FTRL-Proximal offers.  iris.scale gives only 4 x 3 = 12 weights,
+  ;; so this asserts monotonic non-increase plus a strict decrease from the lowest lambda1
+  ;; to the highest, rather than pinning counts -- the same shape LR+FTRL-L1-SPARSITY uses.
+  ;; Measured over ten passes: 12 non-zero at lambda1 0.0, 11 at 1.0, 9 at 10.0, 8 at 100.0.
+  (let ((counts
+          (mapcar (lambda (lambda1)
+                    (let ((learner (make-softmax+ftrl iris-dim 3 0.1 1.0 lambda1 1.0)))
+                      (dotimes (i 10) (train learner iris))
+                      (reduce #'+ (clol::softmax+ftrl-weight learner) :initial-value 0
+                              :key (lambda (row) (count-if-not #'zerop row)))))
+                  '(0.0 1.0 10.0 100.0))))
+    (ok (apply #'>= counts))
+    (ok (< (fourth counts) (first counts)))))
+
+;;; Golden values
+;;;
+;;; Frozen from the implementation, so these cannot themselves show the update rule is
+;;; right -- SOFTMAX+FTRL-LEARNS-IRIS, SOFTMAX+FTRL-WEIGHT-CACHE-INVARIANT,
+;;; SOFTMAX+FTRL-PROBABILITIES-SUM-TO-ONE, SOFTMAX+FTRL-DENSE-SPARSE-AGREE and a hand
+;;; check of the first update do that.  What these catch is drift: any later change to
+;;; the update rule, to float precision, or to iteration order.
+;;;
+;;; A single pass, matching every other golden-value test here.
+
+(deftest dense-softmax+ftrl
+  (let ((learner (make-softmax+ftrl iris-dim 3 0.1 1.0 1.0 1.0)))
+    (train learner iris)
+    (ok (approximately-equal (svref (clol::softmax+ftrl-weight learner) 0)
+                             #(-0.30940944 0.46259928 -0.5985816 -0.5665012)))
+    (ok (approximately-equal (clol::softmax+ftrl-bias learner)
+                             #(-0.07179247 -0.021895776 -0.12316277)))
+    (ok (approximately-equal
+         (multiple-value-bind (accuracy n-correct n-total) (test learner iris)
+           (list accuracy n-correct n-total))
+         '(85.333336 128 150)))))
+
+(deftest sparse-softmax+ftrl
+  ;; Same golden values as DENSE-SOFTMAX+FTRL: the two representations differ only in
+  ;; traversal, which SOFTMAX+FTRL-DENSE-SPARSE-AGREE checks directly.
+  (let ((learner (make-sparse-softmax+ftrl iris-dim 3 0.1 1.0 1.0 1.0)))
+    (train learner iris.sp)
+    (ok (approximately-equal (svref (clol::sparse-softmax+ftrl-weight learner) 0)
+                             #(-0.30940944 0.46259928 -0.5985816 -0.5665012)))
+    (ok (approximately-equal (clol::sparse-softmax+ftrl-bias learner)
+                             #(-0.07179247 -0.021895776 -0.12316277)))
+    (ok (approximately-equal
+         (multiple-value-bind (accuracy n-correct n-total) (test learner iris.sp)
+           (list accuracy n-correct n-total))
+         '(85.333336 128 150)))))
