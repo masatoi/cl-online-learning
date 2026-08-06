@@ -50,7 +50,7 @@
                (format t "RMSE: ~A~%" rmse))
            rmse)))))
 
-(defstruct (rls (:constructor %make-rls)
+(defstruct (rls (:constructor %make-rls) (:copier nil)
                 (:print-object %print-rls))
   input-dimension weight bias
   gamma sigma sigma0 tmp-vec1 tmp-vec2 tmp-float)
@@ -139,7 +139,7 @@
 
 ;;; sparse
 
-(defstruct (sparse-rls (:constructor  %make-sparse-rls)
+(defstruct (sparse-rls (:constructor  %make-sparse-rls) (:copier nil)
                         (:print-object %print-sparse-rls))
   input-dimension weight bias
   gamma sigma sigma0 tmp-vec1 tmp-vec2 tmp-float)
@@ -230,3 +230,14 @@
           ;; Update sigma0
           (setf (sparse-rls-sigma0 learner)
                 (/ (- sigma0 (* g0 sigma0)) gamma)))))))
+
+;;; Deep copies
+;;;
+;;; COPY-LEARNER is generic precisely so a learner defined in a later file can add itself,
+;;; which a TYPECASE in cl-online-learning.lisp could not do. See the section header there.
+
+(define-learner-copier rls
+  input-dimension weight bias gamma sigma sigma0 tmp-vec1 tmp-vec2 tmp-float)
+
+(define-learner-copier sparse-rls
+  input-dimension weight bias gamma sigma sigma0 tmp-vec1 tmp-vec2 tmp-float)

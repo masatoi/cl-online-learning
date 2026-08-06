@@ -36,7 +36,8 @@
    :make-rls :rls-update :rls-train :rls-predict :rls-test
    :make-sparse-rls :sparse-rls-update :sparse-rls-train :sparse-rls-predict :sparse-rls-test
    ; save/restore
-   :save :restore))
+   :save :restore
+   :copy-learner))
 
 (in-package :cl-online-learning)
 
@@ -183,7 +184,7 @@
 
 ;;; Perceptron
 
-(defstruct (perceptron (:constructor %make-perceptron)
+(defstruct (perceptron (:constructor %make-perceptron) (:copier nil)
                        (:print-object %print-perceptron))
   input-dimension weight bias tmp-float)
 
@@ -221,7 +222,7 @@
 
 ;;; AROW
 
-(defstruct (arow (:constructor  %make-arow)
+(defstruct (arow (:constructor  %make-arow) (:copier nil)
                  (:print-object %print-arow))
   input-dimension weight bias
   gamma sigma sigma0 tmp-vec1 tmp-vec2 tmp-float)
@@ -301,7 +302,7 @@
   (* (sqrt 2.0)
      (inverse-erf (- (* 2.0 p) 1.0))))
 
-(defstruct (scw (:constructor  %make-scw)
+(defstruct (scw (:constructor  %make-scw) (:copier nil)
                 (:print-object %print-scw))
   input-dimension weight bias
   eta C
@@ -426,7 +427,7 @@
              (* 2.0 C bias)))
     (values)))
 
-(defstruct (lr+sgd (:constructor %make-lr+sgd))
+(defstruct (lr+sgd (:constructor %make-lr+sgd) (:copier nil))
   input-dimension weight bias
   ;; meta parameters
   C eta g tmp-vec tmp-float)
@@ -466,7 +467,7 @@
     (setf (lr+sgd-bias learner) (- bias (* eta (aref tmp-float 0))))))
 
 ;; Adam: A Method for Stochastic Optimization (https://arxiv.org/abs/1412.6980)
-(defstruct (lr+adam (:constructor %make-lr+adam)
+(defstruct (lr+adam (:constructor %make-lr+adam) (:copier nil)
                  (:print-object %print-lr+adam))
   input-dimension weight bias
   ;; meta parameters
@@ -605,7 +606,7 @@
     (/ (- (- zi (* (if (> zi 0.0) 1.0 -1.0) lambda1)))
        (+ (/ (+ beta (sqrt ni)) alpha) lambda2))))
 
-(defstruct (lr+ftrl (:constructor  %make-lr+ftrl)
+(defstruct (lr+ftrl (:constructor  %make-lr+ftrl) (:copier nil)
                     (:print-object %print-lr+ftrl))
   input-dimension weight bias
   ;; meta parameters
@@ -705,7 +706,7 @@
 
 ;;; Sparse Perceptron
 
-(defstruct (sparse-perceptron (:constructor %make-sparse-perceptron)
+(defstruct (sparse-perceptron (:constructor %make-sparse-perceptron) (:copier nil)
                               (:print-object %print-sparse-perceptron))
   input-dimension weight bias tmp-float)
 
@@ -743,7 +744,7 @@
 
 ;;; Sparse AROW
 
-(defstruct (sparse-arow (:constructor  %make-sparse-arow)
+(defstruct (sparse-arow (:constructor  %make-sparse-arow) (:copier nil)
                         (:print-object %print-sparse-arow))
   input-dimension weight bias
   gamma sigma sigma0 tmp-vec1 tmp-vec2 tmp-float)
@@ -814,7 +815,7 @@
 
 ;;; Sparse SCW-I
 
-(defstruct (sparse-scw (:constructor  %make-sparse-scw)
+(defstruct (sparse-scw (:constructor  %make-sparse-scw) (:copier nil)
                        (:print-object %print-sparse-scw))
   input-dimension weight bias
   eta C
@@ -953,7 +954,7 @@
 
 ;;; Sparse lr+sgd
 
-(defstruct (sparse-lr+sgd (:constructor %make-sparse-lr+sgd))
+(defstruct (sparse-lr+sgd (:constructor %make-sparse-lr+sgd) (:copier nil))
   input-dimension weight bias
   ;; meta parameters
   C eta g tmp-vec tmp-float)
@@ -994,7 +995,7 @@
 
 ;;; Sparse lr+adam
 
-(defstruct (sparse-lr+adam (:constructor %make-sparse-lr+adam)
+(defstruct (sparse-lr+adam (:constructor %make-sparse-lr+adam) (:copier nil)
                            (:print-object %print-sparse-lr+adam))
   input-dimension weight bias
   ;; meta parameters
@@ -1100,7 +1101,7 @@
 ;;; only at the active indices; untouched coordinates keep z = 0, hence w = 0, which is
 ;;; their initial value.
 
-(defstruct (sparse-lr+ftrl (:constructor  %make-sparse-lr+ftrl)
+(defstruct (sparse-lr+ftrl (:constructor  %make-sparse-lr+ftrl) (:copier nil)
                            (:print-object %print-sparse-lr+ftrl))
   input-dimension weight bias
   ;; meta parameters
@@ -1230,7 +1231,7 @@
 (defmacro function-by-name (name-string)
   `(symbol-function (intern ,name-string :cl-online-learning)))
 
-(defstruct (one-vs-rest (:constructor  %make-one-vs-rest)
+(defstruct (one-vs-rest (:constructor  %make-one-vs-rest) (:copier nil)
                         (:print-object %print-one-vs-rest))
   input-dimension n-class learners-vector
   learner-weight learner-bias learner-update learner-activate)
@@ -1316,7 +1317,7 @@
 
 ;;; one-vs-one
 
-(defstruct (one-vs-one (:constructor  %make-one-vs-one)
+(defstruct (one-vs-one (:constructor  %make-one-vs-one) (:copier nil)
                        (:print-object %print-one-vs-one))
   input-dimension n-class learners-vector
   learner-update learner-predict)
@@ -1449,7 +1450,7 @@ learner's weight, which is what lets the existing vector operators apply per row
     (dotimes (i n-class rows)
       (setf (svref rows i) (make-vec input-dimension initial-element)))))
 
-(defstruct (multiclass-arow (:constructor  %make-multiclass-arow)
+(defstruct (multiclass-arow (:constructor  %make-multiclass-arow) (:copier nil)
                             (:print-object %print-multiclass-arow))
   input-dimension n-class weight bias
   gamma sigma sigma0 tmp-vec1 tmp-vec2 tmp-vec3)
@@ -1591,7 +1592,7 @@ learner's weight, which is what lets the existing vector operators apply per row
 ;;; left in a scratch vector outside the current index set are stale and are
 ;;; never read, which is what makes reusing one scratch across data points safe.
 
-(defstruct (sparse-multiclass-arow (:constructor  %make-sparse-multiclass-arow)
+(defstruct (sparse-multiclass-arow (:constructor  %make-sparse-multiclass-arow) (:copier nil)
                                    (:print-object %print-sparse-multiclass-arow))
   input-dimension n-class weight bias
   gamma sigma sigma0 tmp-vec1 tmp-vec2 tmp-vec3)
@@ -1752,7 +1753,7 @@ learner's weight, which is what lets the existing vector operators apply per row
 ;;;; every coordinate's weight is derived from them, so changing one silently
 ;;;; invalidates the entire WEIGHT cache.
 
-(defstruct (softmax+ftrl (:constructor  %make-softmax+ftrl)
+(defstruct (softmax+ftrl (:constructor  %make-softmax+ftrl) (:copier nil)
                          (:print-object %print-softmax+ftrl))
   input-dimension n-class weight bias
   ;; meta parameters
@@ -1920,7 +1921,7 @@ learner's weight, which is what lets the existing vector operators apply per row
 ;;; WEIGHT rows are full-length dense arrays read and written only at the active indices;
 ;;; untouched coordinates keep z = 0, hence w = 0, which is their initial value.
 
-(defstruct (sparse-softmax+ftrl (:constructor  %make-sparse-softmax+ftrl)
+(defstruct (sparse-softmax+ftrl (:constructor  %make-sparse-softmax+ftrl) (:copier nil)
                                 (:print-object %print-sparse-softmax+ftrl))
   input-dimension n-class weight bias
   ;; meta parameters
@@ -2074,6 +2075,152 @@ learner's weight, which is what lets the existing vector operators apply per row
   learner)
 
 (define-multi-class-learner-train/test-functions sparse-softmax+ftrl)
+
+;;; Deep copies of learners
+;;;
+;;; DEFSTRUCT's own copier is shallow and every learner here keeps its state in arrays, so
+;;; a shallow copy shares exactly the thing a caller wanted to snapshot: training the
+;;; original rewrites the copy. cl-random-forest's TRAIN-REFINE-LEARNER-PROCESS was doing
+;;; that -- snapshotting before each epoch to roll back to the best one, and always getting
+;;; the last one instead (masatoi/cl-random-forest#20). Every learner struct is therefore
+;;; declared (:copier nil) and given a deep COPY-<TYPE> under the name DEFSTRUCT would have
+;;; used, so the shallow version is not reachable by accident.
+;;;
+;;; Which slots hold state is decided at run time rather than listed per struct. Passing a
+;;; scalar, a symbol or a function through %COPY-LEARNER-STATE returns it unchanged, so a
+;;; copier names every slot of its struct and cannot misclassify one -- the failure mode
+;;; being guarded against is a slot quietly left shared, and requiring the author to sort
+;;; slots into two lists is how that happens.
+
+(defgeneric copy-learner (learner)
+  (:documentation
+   "Return an independent deep copy of LEARNER, whatever kind of learner it is.
+
+Training the copy does not touch the original and training the original does not touch the
+copy, which is what makes it usable as a snapshot. A learner type with no method signals
+NO-APPLICABLE-METHOD rather than falling back on a shallow copy -- finding out by way of a
+snapshot that silently tracked its original is the failure this exists to prevent."))
+
+(defun %copy-learner-state (value)
+  "Duplicate VALUE if it is mutable learner state, otherwise return it unchanged.
+
+Mutable state is a specialised float vector, or a SIMPLE-VECTOR of them -- the shape
+%MAKE-WEIGHT-VECTORS produces for the multiclass learners. Arrays of any other shape and
+nested structures signal, rather than being shared: a new slot shape must be handled here
+deliberately, because sharing one is silent and only shows up as a snapshot that tracks
+its original."
+  (typecase value
+    ((simple-array single-float (*)) (copy-seq value))
+    (simple-vector (map 'simple-vector #'%copy-learner-state value))
+    (structure-object
+     (error "%COPY-LEARNER-STATE reached a ~S. Nested learners need an explicit copier ~
+that recurses through COPY-LEARNER, as COPY-ONE-VS-REST does."
+            (type-of value)))
+    (array
+     (error "%COPY-LEARNER-STATE cannot duplicate a ~S. Extend it before giving a learner ~
+a slot of that shape." (type-of value)))
+    (t value)))
+
+(defmacro define-learner-copier (learner-type &rest slots)
+  "Define COPY-<LEARNER-TYPE> as a deep copy of a learner struct.
+
+SLOTS should name every slot the struct has. Naming a scalar slot is harmless -- it goes
+through %COPY-LEARNER-STATE unchanged -- and that is deliberate: it means the safe thing
+to do is list them all."
+  (let ((copier (intern (catstr "COPY-" (symbol-name learner-type))))
+        (new (gensym "COPY")))
+    `(progn
+       (defun ,copier (learner)
+         ,(format nil "Return a deep copy of LEARNER, sharing no ~A array with it."
+                  (string-downcase (symbol-name learner-type)))
+         (declare (type ,learner-type learner))
+         (let ((,new (copy-structure learner)))
+           (setf ,@(loop for slot in slots
+                         for accessor = (intern (catstr (symbol-name learner-type)
+                                                        (catstr "-" (symbol-name slot))))
+                         append `((,accessor ,new) (%copy-learner-state (,accessor ,new)))))
+           ,new))
+       (defmethod copy-learner ((learner ,learner-type))
+         (,copier learner)))))
+
+(define-learner-copier perceptron
+  input-dimension weight bias tmp-float)
+
+(define-learner-copier arow
+  input-dimension weight bias gamma sigma sigma0 tmp-vec1 tmp-vec2 tmp-float)
+
+(define-learner-copier scw
+  input-dimension weight bias eta C phi psi zeta sigma sigma0
+  tmp-vec1 tmp-vec2 tmp-float)
+
+(define-learner-copier lr+sgd
+  input-dimension weight bias C eta g tmp-vec tmp-float)
+
+(define-learner-copier lr+adam
+  input-dimension weight bias C alpha epsilon beta1 beta2
+  g m v m0 v0 beta1^t beta2^t tmp-vec tmp-float)
+
+(define-learner-copier lr+ftrl
+  input-dimension weight bias alpha beta lambda1 lambda2 z n z0 n0)
+
+(define-learner-copier sparse-perceptron
+  input-dimension weight bias tmp-float)
+
+(define-learner-copier sparse-arow
+  input-dimension weight bias gamma sigma sigma0 tmp-vec1 tmp-vec2 tmp-float)
+
+(define-learner-copier sparse-scw
+  input-dimension weight bias eta C phi psi zeta sigma sigma0
+  tmp-vec1 tmp-vec2 tmp-float)
+
+(define-learner-copier sparse-lr+sgd
+  input-dimension weight bias C eta g tmp-vec tmp-float)
+
+(define-learner-copier sparse-lr+adam
+  input-dimension weight bias C alpha epsilon beta1 beta2
+  g m v m0 v0 beta1^t beta2^t tmp-vec tmp-float)
+
+(define-learner-copier sparse-lr+ftrl
+  input-dimension weight bias alpha beta lambda1 lambda2 z n z0 n0)
+
+(define-learner-copier multiclass-arow
+  input-dimension n-class weight bias gamma sigma sigma0 tmp-vec1 tmp-vec2 tmp-vec3)
+
+(define-learner-copier sparse-multiclass-arow
+  input-dimension n-class weight bias gamma sigma sigma0 tmp-vec1 tmp-vec2 tmp-vec3)
+
+(define-learner-copier softmax+ftrl
+  input-dimension n-class weight bias alpha beta lambda1 lambda2 z n z0 n0 tmp-p)
+
+(define-learner-copier sparse-softmax+ftrl
+  input-dimension n-class weight bias alpha beta lambda1 lambda2 z n z0 n0 tmp-p)
+
+(defun copy-one-vs-rest (learner)
+  "Return a deep copy of LEARNER, including every sub-learner.
+
+The four function slots are shared rather than copied. They are stateless dispatch
+closures determined by the sub-learner type -- the same ones
+ONE-VS-REST-RESTORE-FUNCTIONS rebuilds from scratch after a CL-STORE round trip."
+  (declare (type one-vs-rest learner))
+  (let ((new (copy-structure learner)))
+    (setf (one-vs-rest-learners-vector new)
+          (map 'simple-vector #'copy-learner (one-vs-rest-learners-vector new)))
+    new))
+
+(defun copy-one-vs-one (learner)
+  "Return a deep copy of LEARNER, including every sub-learner.
+The two function slots are shared, for the reason COPY-ONE-VS-REST gives."
+  (declare (type one-vs-one learner))
+  (let ((new (copy-structure learner)))
+    (setf (one-vs-one-learners-vector new)
+          (map 'simple-vector #'copy-learner (one-vs-one-learners-vector new)))
+    new))
+
+(defmethod copy-learner ((learner one-vs-rest))
+  (copy-one-vs-rest learner))
+
+(defmethod copy-learner ((learner one-vs-one))
+  (copy-one-vs-one learner))
 
 ;;; Save and restore models
 
