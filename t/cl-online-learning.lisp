@@ -1908,3 +1908,70 @@ since neither satisfies <= against a finite bound."
       (ok (< (test learner a1a :quiet-p t) 1.0)))
     ;; GAMMA 0.98 is accepted by MAKE-RLS and does not survive this dataset.
     (ok (not (survives-p 0.98 3)))))
+
+;;;; Deep copies
+;;;;
+;;;; DEFSTRUCT's copier is shallow and every learner keeps its state in arrays, so the
+;;;; copy a caller wanted as a snapshot used to be rewritten by training the original.
+;;;; masatoi/cl-random-forest#20 is what that cost downstream.
+
+(defun sparse-ones (indices)
+  "A sparse vector with 1.0 at each of INDICES."
+  (make-sparse-vector
+   (make-array (length indices) :element-type 'fixnum :initial-contents indices)
+   (make-array (length indices) :element-type 'single-float :initial-element 1.0)))
+
+(deftest copy-learner-is-independent-of-its-original
+  (let ((input (sparse-ones '(0 3 7))))
+    (dolist (spec (list (list "sparse-arow"
+                              (make-sparse-arow 20 10.0)
+                              (lambda (l) (sparse-arow-update l input 1.0))
+                              #'clol::sparse-arow-weight)
+                        (list "sparse-scw"
+                              (make-sparse-scw 20 0.9 1.0)
+                              (lambda (l) (sparse-scw-update l input 1.0))
+                              #'clol::sparse-scw-weight)
+                        (list "sparse-lr+ftrl"
+                              (make-sparse-lr+ftrl 20 0.1 1.0 0.0 1.0)
+                              (lambda (l) (sparse-lr+ftrl-update l input 1.0))
+                              #'clol::sparse-lr+ftrl-weight)
+                        (list "sparse-rls"
+                              (make-sparse-rls 20 1.0)
+                              (lambda (l) (sparse-rls-update l input 1.0))
+                              #'clol::sparse-rls-weight)))
+      (destructuring-bind (name learner update weight-of) spec
+        (let* ((copy (copy-learner learner))
+               (snapshot (copy-seq (funcall weight-of copy))))
+          (dotimes (i 20) (funcall update learner))
+          (ok (equalp snapshot (funcall weight-of copy))
+              (format nil "~A: training the original left the copy alone" name))
+          (ok (not (eq (funcall weight-of learner) (funcall weight-of copy)))
+              (format nil "~A: the two do not share a weight array" name)))))))
+
+(deftest copy-learner-recurses-into-one-vs-rest
+  ;; A shallow copy shares LEARNERS-VECTOR itself, so this fails on the vector before it
+  ;; ever reaches a weight array. ONE-VS-REST's accessors are internal, hence CLOL::.
+  (let* ((input (sparse-ones '(1 4 9)))
+         (learner (make-one-vs-rest 20 3 'sparse-arow 10.0))
+         (copy (copy-learner learner))
+         (weight-of (clol::one-vs-rest-learner-weight learner))
+         (sub (lambda (l i) (svref (clol::one-vs-rest-learners-vector l) i)))
+         (snapshot (copy-seq (funcall weight-of (funcall sub copy 0)))))
+    (ok (not (eq (clol::one-vs-rest-learners-vector learner)
+                 (clol::one-vs-rest-learners-vector copy)))
+        "the learners vectors are distinct")
+    (dotimes (i 3)
+      (ok (not (eq (funcall sub learner i) (funcall sub copy i)))
+          (format nil "sub-learner ~D is a distinct object" i)))
+    (dotimes (i 20)
+      (funcall (clol::one-vs-rest-learner-update learner)
+               (funcall sub learner 0) input 1.0))
+    (ok (equalp snapshot (funcall weight-of (funcall sub copy 0)))
+        "training the original's sub-learner left the copy's alone")))
+
+(deftest copy-learner-refuses-what-it-does-not-know
+  ;; The point of the generic function: a learner type added without a copier signals
+  ;; instead of silently getting a shallow copy back.
+  (ok (handler-case (progn (copy-learner "not a learner") nil)
+        (error () t))
+      "copy-learner signals on a non-learner"))
